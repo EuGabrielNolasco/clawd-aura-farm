@@ -1,0 +1,413 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Clawd Aura Farm</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;700&family=VT323&display=swap">
+<style>
+/* Layout: one-screen stage — aura counter on top, mascot center doing the 6-7, farm button and level ladder below.
+   Each level adds a class (l1…l10) to .stage, so effects stack as you climb. */
+:root {
+  --night: #140f24;
+  --dusk: #231a3d;
+  --clawd: #d97757;
+  --clawd-dark: #a8553b;
+  --aura: #ffd166;
+  --ink: #f3ecff;
+  --muted: #a99cc9;
+  --violet: #8b5cf6;
+  --display: "Pixelify Sans", "Courier New", monospace;
+  --mono: "VT323", "Courier New", monospace;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body {
+  background-color: var(--night);
+  color: var(--ink);
+  font-family: var(--display);
+  margin: 0;
+  overflow: hidden;
+}
+.stage {
+  height: 100%;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 1rem;
+  padding-inline: 16px;
+  text-align: center;
+  position: relative;
+  background: radial-gradient(ellipse at 50% 60%, var(--dusk), var(--night) 70%);
+  transition: background .8s;
+}
+canvas#fx { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; }
+.bg67 {
+  position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none;
+  font-family: var(--display); font-weight: 700; font-size: 60vmin; line-height: 1;
+  color: var(--aura); opacity: 0; z-index: 0;
+}
+.hud { position: relative; z-index: 2; display: grid; gap: .25rem; }
+.label { font-size: .8rem; letter-spacing: .2em; text-transform: uppercase; color: var(--muted); }
+.count {
+  font-family: var(--mono); font-size: clamp(2.6rem, 11vw, 5.5rem); line-height: 1;
+  color: var(--aura); font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 18px color-mix(in srgb, var(--aura) 60%, transparent);
+}
+.rank { font-size: 1.1rem; color: var(--ink); }
+.rank b { color: var(--clawd); }
+.mult { font-family: var(--mono); font-size: 1.15rem; color: var(--muted); }
+.next { width: min(280px, 80vw); height: 8px; background: color-mix(in srgb, var(--ink) 15%, transparent); margin: .3rem auto 0; }
+.next > i { display: block; height: 100%; width: 0; background: var(--aura); transition: width .3s; }
+
+.mascot-wrap { position: relative; z-index: 2; width: min(280px, 60vw, 38vh); aspect-ratio: 1; max-width: 100%; cursor: pointer; }
+.halo {
+  position: absolute; inset: 8%;
+  border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--aura) 55%, transparent), transparent 65%);
+  filter: blur(8px);
+  opacity: 0; transition: opacity .6s;
+  animation: pulse 1.2s ease-in-out infinite;
+}
+.ring {
+  position: absolute; inset: -6%; border-radius: 50%; opacity: 0; transition: opacity .6s;
+  background: conic-gradient(#ff6b6b, var(--aura), #6bffb8, #6bc5ff, var(--violet), #ff6bd5, #ff6b6b);
+  -webkit-mask: radial-gradient(circle, transparent 58%, #000 60%, #000 66%, transparent 68%);
+          mask: radial-gradient(circle, transparent 58%, #000 60%, #000 66%, transparent 68%);
+  animation: spin 3s linear infinite;
+}
+.spot {
+  position: absolute; left: 50%; bottom: 10%; width: 160%; height: 260%; translate: -50% 0;
+  background: linear-gradient(to bottom, transparent, color-mix(in srgb, var(--ink) 18%, transparent));
+  clip-path: polygon(42% 0, 58% 0, 100% 100%, 0 100%);
+  opacity: 0; transition: opacity .6s; pointer-events: none;
+}
+.clones { position: absolute; inset: 0; pointer-events: none; }
+.clones svg { position: absolute; width: 45%; height: 45%; opacity: 0; transition: opacity .6s; }
+.clones svg:nth-child(1) { left: -55%; top: 20%; }
+.clones svg:nth-child(2) { right: -55%; top: 20%; }
+.clones svg:nth-child(3) { left: 27%; top: -55%; }
+.mascot { position: relative; width: 100%; height: 100%; animation: bob .6s ease-in-out infinite; }
+.arm-l { animation: six .6s steps(2, jump-none) infinite; transform-box: fill-box; }
+.arm-r { animation: seven .6s steps(2, jump-none) infinite; transform-box: fill-box; }
+.eye { animation: blink 3.4s infinite; transform-box: fill-box; transform-origin: center; }
+.body-fill { fill: var(--clawd); transition: fill .6s; }
+.shades, .crown, .wings { opacity: 0; transition: opacity .4s; }
+.wings { animation: flap .3s steps(2, jump-none) infinite; transform-box: fill-box; transform-origin: center; }
+
+.sixseven {
+  position: absolute; z-index: 3; font-size: clamp(1.4rem, 5vw, 2.2rem); font-weight: 700;
+  color: var(--ink); text-shadow: 3px 3px 0 var(--clawd-dark);
+  top: 6%; white-space: nowrap;
+}
+.sixseven.l { left: -14%; animation: floatL .6s steps(2, jump-none) infinite; }
+.sixseven.r { right: -14%; animation: floatR .6s steps(2, jump-none) infinite; }
+
+.controls { position: relative; z-index: 2; display: flex; gap: .75rem; flex-wrap: wrap; justify-content: center; align-items: center; }
+button { font-family: var(--display); font-weight: 700; cursor: pointer; border: 0; }
+button:focus-visible { outline: 3px solid var(--ink); outline-offset: 4px; }
+#farm {
+  font-size: 1.2rem; color: var(--night); background: var(--aura);
+  padding: .8rem 1.4rem; box-shadow: 0 5px 0 var(--clawd-dark); letter-spacing: .04em;
+}
+#farm:active { transform: translateY(4px); box-shadow: 0 1px 0 var(--clawd-dark); }
+#reset { font-size: .85rem; color: var(--muted); background: transparent; padding: .5rem; text-decoration: underline; }
+
+.ladder { position: relative; z-index: 2; display: flex; flex-wrap: wrap; justify-content: center; gap: .35rem; max-width: 640px; }
+.ladder span {
+  font-family: var(--mono); font-size: 1rem; padding: .1rem .45rem;
+  color: var(--muted); border: 1px solid color-mix(in srgb, var(--muted) 35%, transparent);
+}
+.ladder span.on { color: var(--night); background: var(--clawd); border-color: var(--clawd); }
+.ladder span.now { background: var(--aura); border-color: var(--aura); }
+
+.banner {
+  position: absolute; z-index: 5; left: 50%; top: 42%; translate: -50% -50%;
+  font-size: clamp(1.5rem, 7vw, 3rem); font-weight: 700; white-space: nowrap;
+  color: var(--aura); text-shadow: 4px 4px 0 var(--clawd-dark), 0 0 30px var(--aura);
+  pointer-events: none; opacity: 0;
+}
+.banner small { display: block; font-size: .45em; color: var(--ink); text-shadow: none; letter-spacing: .2em; }
+.banner.show { animation: banner 2.2s ease-out; }
+.flash { position: absolute; inset: 0; background: var(--ink); opacity: 0; pointer-events: none; z-index: 4; }
+.flash.go { animation: flash .35s ease-out; }
+.stage.shake { animation: shake .25s; }
+
+/* ===== Efeitos por nível (acumulam) ===== */
+.l1 .halo { opacity: .45; }                                   /* Figurante: brilho fraco */
+.l2 .spot { opacity: 1; } .l2 .halo { opacity: .8; }          /* Main character: holofote */
+.l3 .shades { opacity: 1; } .l3 .eye { opacity: 0; }          /* Sigma: óculos + vinheta roxa */
+.l3 { background: radial-gradient(ellipse at 50% 60%, #2e1f55, var(--night) 70%); }
+.l4 .ring { opacity: 1; }                                     /* Aura infinita: anel arco-íris */
+.l5 .crown { opacity: 1; }                                    /* Lenda: coroa + fogo (canvas) */
+.l6 .wings { opacity: 1; } .l6 .mascot-wrap { animation: ascend 2.4s ease-in-out infinite; }  /* Ascendido: asas + estrelas */
+.l7 .body-fill { fill: var(--aura); }                         /* Deus do 6-7: Clawd dourado + raios */
+.l7 { background: radial-gradient(ellipse at 50% 60%, #3d2a10, var(--night) 70%); }
+.l8 .clones svg { opacity: .5; }                              /* Multiverso: clones */
+.l8 .bg67 { opacity: .06; animation: pulse 1.2s ease-in-out infinite; }
+.l9 { animation: hue 6s linear infinite; }                    /* Clawd Supremo: realidade derretendo */
+.l9 .mascot { filter: drop-shadow(0 0 12px var(--aura)); }
+.l10 .bg67 { opacity: .14; color: var(--clawd); }             /* O Próprio 67: tudo no máximo */
+.l10 .mascot-wrap { animation: ascend 1.2s ease-in-out infinite, wobble .6s steps(2, jump-none) infinite; }
+
+@keyframes bob { 50% { transform: translateY(-3%); } }
+@keyframes six { 0% { transform: translateY(-18%); } 100% { transform: translateY(18%); } }
+@keyframes seven { 0% { transform: translateY(18%); } 100% { transform: translateY(-18%); } }
+@keyframes floatL { 0% { transform: translateY(-10px); } 100% { transform: translateY(10px); } }
+@keyframes floatR { 0% { transform: translateY(10px); } 100% { transform: translateY(-10px); } }
+@keyframes pulse { 50% { transform: scale(1.12); } }
+@keyframes blink { 0%, 92%, 100% { transform: scaleY(1); } 95% { transform: scaleY(.1); } }
+@keyframes spin { to { transform: rotate(1turn); } }
+@keyframes flap { 0% { transform: scaleY(1); } 100% { transform: scaleY(.6); } }
+@keyframes ascend { 50% { translate: 0 -12px; } }
+@keyframes wobble { 0% { rotate: -4deg; } 100% { rotate: 4deg; } }
+@keyframes hue { to { filter: hue-rotate(1turn); } }
+@keyframes banner { 0% { opacity: 0; scale: .4; } 15% { opacity: 1; scale: 1.15; } 25% { scale: 1; } 80% { opacity: 1; } 100% { opacity: 0; translate: -50% -90%; } }
+@keyframes flash { 0% { opacity: .7; } 100% { opacity: 0; } }
+@keyframes shake { 25% { transform: translate(-6px, 3px); } 50% { transform: translate(5px, -4px); } 75% { transform: translate(-3px, 5px); } }
+@media (prefers-reduced-motion: reduce) {
+  *, .l9, .l10 .mascot-wrap { animation: none !important; }
+}
+</style>
+</head>
+<body>
+
+<div class="stage" id="stage">
+  <div class="bg67" aria-hidden="true">67</div>
+  <canvas id="fx"></canvas>
+  <div class="flash" id="flash"></div>
+
+  <div class="hud">
+    <div class="label">Aura farmada</div>
+    <div class="count" id="count">0</div>
+    <div class="rank">Nível: <b id="rank">NPC</b></div>
+    <div class="mult" id="mult">×1 por clique</div>
+    <div class="next" title="Progresso até o próximo nível"><i id="bar"></i></div>
+  </div>
+
+  <div class="mascot-wrap" id="mascot" role="button" tabindex="0" aria-label="Clawd fazendo six seven. Clique para farmar aura.">
+    <div class="spot"></div>
+    <div class="halo"></div>
+    <div class="ring"></div>
+    <div class="clones" id="clones"></div>
+    <span class="sixseven l">6</span>
+    <span class="sixseven r">7</span>
+    <svg class="mascot" id="clawd" viewBox="0 0 32 32" shape-rendering="crispEdges">
+      <!-- asas (Ascendido) -->
+      <g class="wings" fill="#f3ecff">
+        <rect x="1" y="5" width="6" height="2"/><rect x="2" y="7" width="5" height="2"/><rect x="4" y="3" width="3" height="2"/>
+        <rect x="25" y="5" width="6" height="2"/><rect x="25" y="7" width="5" height="2"/><rect x="25" y="3" width="3" height="2"/>
+      </g>
+      <g class="body-fill">
+        <rect x="8" y="9" width="16" height="12"/>
+        <rect x="9" y="21" width="2" height="4"/>
+        <rect x="13" y="21" width="2" height="4"/>
+        <rect x="17" y="21" width="2" height="4"/>
+        <rect x="21" y="21" width="2" height="4"/>
+      </g>
+      <g class="arm-l">
+        <rect class="body-fill" x="4" y="13" width="4" height="2"/>
+        <rect x="2" y="11" width="3" height="2" fill="#ffd166"/>
+      </g>
+      <g class="arm-r">
+        <rect class="body-fill" x="24" y="13" width="4" height="2"/>
+        <rect x="27" y="11" width="3" height="2" fill="#ffd166"/>
+      </g>
+      <g fill="#140f24">
+        <rect class="eye" x="11" y="12" width="2" height="3"/>
+        <rect class="eye" x="19" y="12" width="2" height="3"/>
+      </g>
+      <g class="shades" fill="#140f24">
+        <rect x="9" y="12" width="6" height="3"/>
+        <rect x="17" y="12" width="6" height="3"/>
+        <rect x="15" y="12" width="2" height="1"/>
+        <rect x="10" y="12" width="2" height="1" fill="#f3ecff"/>
+        <rect x="18" y="12" width="2" height="1" fill="#f3ecff"/>
+      </g>
+      <!-- coroa (Lenda) -->
+      <g class="crown" fill="#ffd166">
+        <rect x="11" y="6" width="10" height="3"/>
+        <rect x="11" y="4" width="2" height="2"/><rect x="15" y="3" width="2" height="3"/><rect x="19" y="4" width="2" height="2"/>
+        <rect x="15" y="7" width="2" height="1" fill="#ff6b6b"/>
+      </g>
+      <rect x="8" y="21" width="16" height="1" fill="#a8553b"/>
+    </svg>
+    <div class="banner" id="banner"></div>
+  </div>
+
+  <div class="controls">
+    <button id="farm" type="button">FARMAR AURA <span id="gain">+67</span></button>
+    <button id="reset" type="button">zerar aura</button>
+  </div>
+  <div class="ladder" id="ladder"></div>
+</div>
+
+<script>
+(() => {
+  // [mínimo de aura, nome]. Cada nível multiplica o ganho por 5.
+  const RANKS = [
+    [0, "NPC"], [67, "Figurante"], [670, "Main character"], [6700, "Sigma"],
+    [67000, "Aura infinita"], [670000, "Lenda do 6-7"], [6.7e6, "Ascendido"],
+    [6.7e7, "Deus do 6-7"], [6.7e8, "Multiverso"], [6.7e9, "Clawd Supremo"], [6.7e10, "O Próprio 67"]
+  ];
+  const $ = id => document.getElementById(id);
+  const stage = $("stage"), mascot = $("mascot"), canvas = $("fx"), ctx = canvas.getContext("2d");
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // clones pro Multiverso
+  for (let i = 0; i < 3; i++) $("clones").appendChild($("clawd").cloneNode(true)).removeAttribute("id");
+
+  $("ladder").innerHTML = RANKS.map(([, n]) => `<span>${n}</span>`).join("");
+  const ladderEls = [...$("ladder").children];
+
+  let aura = 0, level = -1;
+  try { aura = Number(localStorage.getItem("aura")) || 0; } catch (e) {}
+
+  const levelOf = a => { let l = 0; RANKS.forEach(([min], i) => { if (a >= min) l = i; }); return l; };
+  const mult = () => Math.pow(5, Math.max(level, 0));
+  const fmt = n => Math.floor(n).toLocaleString("pt-BR");
+
+  const particles = [];
+  function resize() {
+    const dpr = devicePixelRatio || 1;
+    canvas.width = innerWidth * dpr; canvas.height = innerHeight * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  addEventListener("resize", resize); resize();
+
+  function levelUp(l) {
+    const b = $("banner");
+    b.innerHTML = `<small>SUBIU DE NÍVEL</small>${RANKS[l][1]}`;
+    b.classList.remove("show"); void b.offsetWidth; b.classList.add("show");
+    flash();
+    const r = mascot.getBoundingClientRect();
+    burst(r.left + r.width / 2, r.top + r.height / 2, null, 40);
+  }
+
+  function render() {
+    const l = levelOf(aura);
+    if (l !== level) {
+      const up = level >= 0 && l > level;
+      level = l;
+      for (let i = 1; i < RANKS.length; i++) stage.classList.toggle("l" + i, i <= l);
+      ladderEls.forEach((el, i) => { el.classList.toggle("on", i <= l); el.classList.toggle("now", i === l); });
+      $("rank").textContent = RANKS[l][1];
+      $("mult").textContent = `×${fmt(mult())} por clique`;
+      $("gain").textContent = "+" + fmt(67 * mult());
+      if (up) levelUp(l);
+    }
+    $("count").textContent = fmt(aura);
+    const cur = RANKS[level][0], nxt = RANKS[level + 1];
+    $("bar").style.width = nxt ? Math.min(100, (aura - cur) / (nxt[0] - cur) * 100) + "%" : "100%";
+    try { localStorage.setItem("aura", String(aura)); } catch (e) {}
+  }
+
+  function burst(x, y, label, n = 14) {
+    if (reduce) return;
+    if (label) particles.push({ x, y, vx: 0, vy: -1.6, life: 60, text: label, kind: "big" });
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2, s = 1 + Math.random() * 3;
+      particles.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 1, life: 40 + Math.random() * 20,
+        text: Math.random() < .5 ? "6" : "7", kind: "num" });
+    }
+  }
+
+  function flash() {
+    if (reduce) return;
+    const f = $("flash"); f.classList.remove("go"); void f.offsetWidth; f.classList.add("go");
+  }
+
+  function farm(ev) {
+    const crit = Math.random() < 0.1;
+    const gain = 67 * mult() * (crit ? 10 : 1);
+    aura += gain;
+    const rect = mascot.getBoundingClientRect();
+    const x = ev && ev.clientX ? ev.clientX : rect.left + rect.width / 2;
+    const y = ev && ev.clientY ? ev.clientY : rect.top + rect.height / 3;
+    burst(x, y, "+" + fmt(gain) + (crit ? " CRÍTICO" : ""), level >= 4 ? 24 : 14);
+    if (level >= 7 && !reduce) { stage.classList.remove("shake"); void stage.offsetWidth; stage.classList.add("shake"); }
+    render();
+  }
+
+  // aura passiva: o Clawd farma sozinho
+  setInterval(() => { aura += 6 * mult(); render(); }, 700);
+
+  // estrelas fixas pro Ascendido
+  const stars = Array.from({ length: 70 }, () => ({ x: Math.random(), y: Math.random(), p: Math.random() * 6 }));
+  let t = 0, bolt = null;
+
+  function tick() {
+    t++;
+    const W = innerWidth, H = innerHeight;
+    ctx.clearRect(0, 0, W, H);
+    const r = mascot.getBoundingClientRect();
+    const cx = r.left + r.width / 2;
+
+    if (!reduce) {
+      // Ascendido+: estrelas piscando
+      if (level >= 6) {
+        ctx.fillStyle = "#f3ecff";
+        for (const s of stars) {
+          ctx.globalAlpha = .3 + .7 * Math.abs(Math.sin(t / 40 + s.p));
+          ctx.fillRect(s.x * W, s.y * H, 2, 2);
+        }
+      }
+      // Lenda+: fogo subindo do Clawd
+      if (level >= 5 && t % 2 === 0) {
+        particles.push({ x: cx + (Math.random() - .5) * r.width * .7, y: r.bottom - r.height * .2,
+          vx: (Math.random() - .5) * .5, vy: -1.5 - Math.random() * 1.5, life: 40, kind: "fire" });
+      }
+      // Deus do 6-7+: raios de vez em quando
+      if (level >= 7 && !bolt && Math.random() < .008) {
+        const pts = [[Math.random() * W, 0]];
+        while (pts[pts.length - 1][1] < H * .7) {
+          const [px, py] = pts[pts.length - 1];
+          pts.push([px + (Math.random() - .5) * 80, py + 30 + Math.random() * 40]);
+        }
+        bolt = { pts, life: 10 };
+        flash();
+      }
+      if (bolt) {
+        ctx.globalAlpha = bolt.life / 10;
+        ctx.strokeStyle = "#ffd166"; ctx.lineWidth = 3; ctx.beginPath();
+        bolt.pts.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y));
+        ctx.stroke();
+        if (--bolt.life <= 0) bolt = null;
+      }
+      // O Próprio 67: chuva de 67
+      if (level >= 10 && t % 4 === 0) {
+        particles.push({ x: Math.random() * W, y: -20, vx: 0, vy: 2 + Math.random() * 3, life: H / 2, text: "67", kind: "rain" });
+      }
+    }
+
+    ctx.textAlign = "center";
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
+      p.x += p.vx; p.y += p.vy; p.life--;
+      if (p.kind === "num") p.vy += 0.06;
+      if (p.life <= 0 || p.y > H + 30) { particles.splice(i, 1); continue; }
+      if (p.kind === "fire") {
+        ctx.globalAlpha = p.life / 40;
+        ctx.fillStyle = p.life > 25 ? "#ffd166" : p.life > 12 ? "#d97757" : "#ff6b6b";
+        const s = 3 + p.life / 8;
+        ctx.fillRect(p.x - s / 2, p.y - s / 2, s, s);
+        continue;
+      }
+      ctx.globalAlpha = p.kind === "rain" ? .5 : Math.min(1, p.life / 30);
+      ctx.fillStyle = p.kind === "big" ? "#ffd166" : p.kind === "rain" ? "#d97757" : (p.text === "6" ? "#d97757" : "#f3ecff");
+      ctx.font = (p.kind === "big" ? "700 26px " : "500 18px ") + '"Pixelify Sans", monospace';
+      ctx.fillText(p.text, p.x, p.y);
+    }
+    ctx.globalAlpha = 1;
+    requestAnimationFrame(tick);
+  }
+  tick();
+
+  $("farm").addEventListener("click", farm);
+  $("reset").addEventListener("click", () => { aura = 0; render(); });
+  mascot.addEventListener("click", farm);
+  mascot.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); farm(); } });
+  render();
+})();
+</script>
+</body>
+</html>
