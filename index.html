@@ -110,6 +110,15 @@ button:focus-visible { outline: 3px solid var(--ink); outline-offset: 4px; }
   padding: .8rem 1.4rem; box-shadow: 0 5px 0 var(--clawd-dark); letter-spacing: .04em;
 }
 #farm:active { transform: translateY(4px); box-shadow: 0 1px 0 var(--clawd-dark); }
+#star {
+  font-family: var(--display); font-weight: 700; font-size: 1rem; text-decoration: none;
+  color: var(--aura); border: 2px solid var(--aura); padding: .65rem 1rem;
+  display: inline-flex; align-items: center; gap: .4rem;
+}
+#star:hover { background: var(--aura); color: var(--night); }
+#star:focus-visible { outline: 3px solid var(--ink); outline-offset: 4px; }
+#star.nudge { animation: nudge .6s ease-in-out 3; }
+@keyframes nudge { 50% { transform: scale(1.12); box-shadow: 0 0 18px var(--aura); } }
 #reset { font-size: .85rem; color: var(--muted); background: transparent; padding: .5rem; text-decoration: underline; }
 
 .ladder { position: relative; z-index: 2; display: flex; flex-wrap: wrap; justify-content: center; gap: .35rem; max-width: 640px; }
@@ -236,6 +245,7 @@ button:focus-visible { outline: 3px solid var(--ink); outline-offset: 4px; }
 
   <div class="controls">
     <button id="farm" type="button">FARMAR AURA <span id="gain">+67</span></button>
+    <a id="star" href="https://github.com/EuGabrielNolasco/clawd-aura-farm" target="_blank" rel="noopener">⭐ Dar estrela no GitHub</a>
     <button id="reset" type="button">zerar aura</button>
   </div>
   <div class="ladder" id="ladder"></div>
@@ -293,7 +303,7 @@ button:focus-visible { outline: 3px solid var(--ink); outline-offset: 4px; }
       $("rank").textContent = RANKS[l][1];
       $("mult").textContent = `×${fmt(mult())} por clique`;
       $("gain").textContent = "+" + fmt(67 * mult());
-      if (up) levelUp(l);
+      if (up) { levelUp(l); const s = $("star"); s.classList.remove("nudge"); void s.offsetWidth; s.classList.add("nudge"); }
     }
     $("count").textContent = fmt(aura);
     const cur = RANKS[level][0], nxt = RANKS[level + 1];
