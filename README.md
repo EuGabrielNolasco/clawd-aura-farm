@@ -4,7 +4,9 @@ Um mini jogo de clique em que o Clawd, o mascote do Claude Code, faz o **six sev
 
 ## Como jogar
 
-Abra o `index.html` no navegador e clique no Clawd ou no botão **FARMAR AURA**.
+**Jogue aqui:** https://eugabrielnolasco.github.io/clawd-aura-farm/
+
+Ou abra o `index.html` no navegador. Clique no Clawd ou no botão **FARMAR AURA**.
 
 - Cada clique dá +67 de aura, multiplicado por 5 a cada nível
 - 10% dos cliques saem crítico (10×)
@@ -31,4 +33,8 @@ Abra o `index.html` no navegador e clique no Clawd ou no botão **FARMAR AURA**.
 
 HTML, CSS e Canvas puros, num arquivo só e sem dependências. O código foi escrito com o [Claude Code](https://claude.com/claude-code).
 
-Projeto de fã, sem relação oficial com a Anthropic.
+## Licença
+
+O código está sob a licença [MIT](LICENSE).
+
+Projeto de fã, sem relação oficial com a Anthropic. O nome Claude e o personagem Clawd pertencem à Anthropic, e a licença MIT não cobre eles.
