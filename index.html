@@ -27,7 +27,38 @@
     <div class="mult"><span id="mult">×1 de nível</span> · <span id="rate">+0/s no automático</span></div>
     <div class="next" title="Progresso até o próximo nível"><i id="bar"></i></div>
     <div class="next-label" id="next"></div>
+    <div class="tokens" id="tokens" title="Fichas 67: a moeda dos enfeites">🎟 0 fichas</div>
+    <div class="ahead" id="ahead" hidden></div>
   </div>
+
+  <!-- Modo Mega Brain: HUD estilo Jarvis enquanto o buff do Cérebro Dourado dura -->
+  <div class="jarvis" id="jarvis" aria-hidden="true">
+    <div class="jarvis-scan"></div>
+    <div class="jarvis-ring r1"></div><div class="jarvis-ring r2"></div><div class="jarvis-ring r3"></div>
+    <div class="jarvis-text">MEGA BRAIN ATIVADO<small id="jarvis-time"></small></div>
+  </div>
+
+  <button class="golden" id="golden" type="button" hidden aria-label="Cérebro Dourado! Clique para ativar o Modo Mega Brain">
+    <svg viewBox="0 0 16 12" shape-rendering="crispEdges" aria-hidden="true">
+      <rect x="2" y="2" width="12" height="8" fill="#ffd166"/><rect x="3" y="1" width="4" height="1" fill="#ffd166"/>
+      <rect x="9" y="1" width="4" height="1" fill="#ffd166"/><rect x="1" y="3" width="1" height="6" fill="#ffd166"/>
+      <rect x="14" y="3" width="1" height="6" fill="#ffd166"/><rect x="3" y="10" width="10" height="1" fill="#e0a92e"/>
+      <rect x="5" y="2" width="1" height="3" fill="#e0a92e"/><rect x="8" y="1" width="1" height="6" fill="#e0a92e"/>
+      <rect x="11" y="3" width="1" height="3" fill="#e0a92e"/><rect x="3" y="6" width="3" height="1" fill="#e0a92e"/>
+      <rect x="4" y="4" width="1" height="1" fill="#fff"/><rect x="10" y="7" width="1" height="1" fill="#fff"/>
+    </svg>
+  </button>
+
+  <button class="thief" id="thief" type="button" hidden aria-label="Ladrão de aura! Clique para pegar">
+    <svg viewBox="0 0 16 16" shape-rendering="crispEdges" aria-hidden="true">
+      <rect x="4" y="3" width="7" height="7" fill="#d97757"/><rect x="4" y="5" width="7" height="2" fill="#140f24"/>
+      <rect x="5" y="5" width="1" height="1" fill="#f3ecff"/><rect x="9" y="5" width="1" height="1" fill="#f3ecff"/>
+      <rect x="4" y="2" width="7" height="1" fill="#140f24"/>
+      <rect x="4" y="10" width="2" height="3" fill="#d97757"/><rect x="9" y="10" width="2" height="3" fill="#d97757"/>
+      <rect x="11" y="4" width="4" height="5" fill="#a87b4f"/><rect x="12" y="3" width="2" height="1" fill="#6b4a2b"/>
+      <rect x="12" y="5" width="2" height="2" fill="#ffd166"/>
+    </svg>
+  </button>
 
   <div class="mascot-wrap" id="mascot" role="button" tabindex="0" aria-label="Clawd fazendo six seven. Clique para farmar aura.">
     <div class="spot"></div>
@@ -103,33 +134,67 @@
         <rect x="15" y="7" width="2" height="1" fill="#ff6b6b"/>
       </g>
       <rect x="8" y="21" width="16" height="1" fill="#a8553b"/>
+      <!-- enfeites equipados (desenhos de src/cosmetics.ts) -->
+      <g id="cos-outfit"></g><g id="cos-face"></g><g id="cos-hat"></g>
     </svg>
     <div class="banner" id="banner"></div>
   </div>
 
+  <div class="combo" id="combo" aria-hidden="true"><i id="combo-bar"></i><span id="combo-text">COMBO ×1</span></div>
+
   <div class="controls">
     <button id="farm" type="button">FARMAR AURA <span id="gain">+67</span></button>
-    <button id="ranking-open" type="button" hidden>🏆 Ranking</button>
+    <button id="prestige" type="button" hidden>✨ Renascer (+25%)</button>
+    <button class="menu-open" type="button" data-tab="ranking" id="ranking-open" hidden>🏆 Ranking</button>
+    <button class="menu-open" type="button" data-tab="ach">🎖 Conquistas</button>
+    <button class="menu-open" type="button" data-tab="cos">👕 Enfeites</button>
     <button id="shop-toggle" type="button" aria-controls="shop" aria-expanded="false">🛒 Loja</button>
     <a id="star" href="https://github.com/EuGabrielNolasco/clawd-aura-farm" target="_blank" rel="noopener">⭐ Dar estrela no GitHub</a>
     <button id="reset" type="button">zerar aura</button>
   </div>
   <div class="ladder" id="ladder"></div>
 
-  <dialog class="ranking" id="ranking" aria-labelledby="ranking-title">
-    <div class="shop-head"><h2 id="ranking-title">Ranking</h2><button id="ranking-close" type="button" aria-label="Fechar ranking">✕</button></div>
-    <p class="my-rank" id="my-rank">Conectando…</p>
-    <form id="name-form">
-      <label for="name">Seu apelido</label>
-      <div class="name-row">
-        <input id="name" name="name" required minlength="3" maxlength="20" autocomplete="nickname"
-               pattern="[A-Za-zÀ-ÖØ-öø-ÿ0-9 _.\-]{3,20}" title="De 3 a 20 letras, números, espaço, _ . ou -">
-        <button type="submit">Salvar</button>
+  <dialog class="menu" id="menu" aria-label="Menu">
+    <div class="shop-head">
+      <div class="tabs" role="tablist">
+        <button role="tab" type="button" data-tab="ranking" id="tab-ranking" hidden>🏆 Ranking</button>
+        <button role="tab" type="button" data-tab="ach">🎖 Conquistas</button>
+        <button role="tab" type="button" data-tab="cos">👕 Enfeites</button>
       </div>
-      <p class="name-msg" id="name-msg" role="status"></p>
-    </form>
-    <ol class="top" id="top"></ol>
-    <p class="net" id="net"></p>
+      <button id="menu-close" type="button" aria-label="Fechar">✕</button>
+    </div>
+
+    <section class="panel" data-panel="ranking" role="tabpanel">
+      <p class="my-rank" id="my-rank">Conectando…</p>
+      <form id="name-form">
+        <label for="name">Seu apelido</label>
+        <div class="name-row">
+          <input id="name" name="name" required minlength="3" maxlength="20" autocomplete="nickname"
+                 pattern="[A-Za-zÀ-ÖØ-öø-ÿ0-9 _.\-]{3,20}" title="De 3 a 20 letras, números, espaço, _ . ou -">
+          <button type="submit">Salvar</button>
+        </div>
+        <p class="name-msg" id="name-msg" role="status"></p>
+      </form>
+      <div class="subtabs">
+        <button type="button" data-list="around" class="on">Perto de você</button>
+        <button type="button" data-list="top">Top 10</button>
+      </div>
+      <ol class="top" id="top"></ol>
+      <p class="net" id="net"></p>
+    </section>
+
+    <section class="panel" data-panel="ach" role="tabpanel">
+      <p class="my-rank" id="ach-summary"></p>
+      <ul class="ach-list" id="ach-list"></ul>
+    </section>
+
+    <section class="panel" data-panel="cos" role="tabpanel">
+      <div class="cos-top">
+        <div class="cos-preview" id="cos-preview"></div>
+        <p class="my-rank"><b id="cos-tokens">0</b> Fichas 67<br><small>Ganhe com conquistas, login diário e pegando ladrões.</small></p>
+      </div>
+      <div id="cos-list"></div>
+    </section>
   </dialog>
 
   <aside class="shop" id="shop" aria-label="Loja de upgrades">

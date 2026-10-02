@@ -5,7 +5,7 @@
 [![Licença: MIT](https://img.shields.io/badge/licen%C3%A7a-MIT-8b5cf6?style=flat-square)](LICENSE)
 ![TypeScript](https://img.shields.io/badge/TypeScript-Vite-d97757?style=flat-square)
 
-Jogo incremental (*idle clicker*) para o navegador. O Clawd, mascote do Claude Code, faz o **six seven** sem parar enquanto você farma aura, sobe por 11 níveis, completa a loja e disputa o ranking global.
+Jogo incremental (*idle clicker*) para o navegador. O Clawd, mascote do Claude Code, faz o **six seven** sem parar enquanto você farma aura, sobe por 16 níveis cheios de memes BR, caça Cérebros Dourados, veste o Clawd com enfeites e disputa o ranking global.
 
 **[▶ Jogar agora](https://eugabrielnolasco.github.io/clawd-aura-farm/)**
 
@@ -15,9 +15,11 @@ Jogo incremental (*idle clicker*) para o navegador. O Clawd, mascote do Claude C
 - [Como jogar](#como-jogar)
 - [Níveis](#níveis)
 - [Loja](#loja)
+- [Eventos, conquistas e enfeites](#eventos-conquistas-e-enfeites)
 - [Ranking e segurança](#ranking-e-segurança)
 - [Rodando localmente](#rodando-localmente)
 - [Configurando o ranking (Supabase)](#configurando-o-ranking-supabase)
+- [Painel dev](#painel-dev)
 - [Estrutura do projeto](#estrutura-do-projeto)
 - [Deploy](#deploy)
 - [Contribuindo](#contribuindo)
@@ -25,47 +27,59 @@ Jogo incremental (*idle clicker*) para o navegador. O Clawd, mascote do Claude C
 
 ## Funcionalidades
 
-- **Progressão longa:** cerca de 3 dias até o nível máximo e cerca de 1 semana para completar a loja.
-- **Loja com 6 upgrades**, cada um com limite de compras: dá para completar tudo.
+- **Progressão longa:** os primeiros níveis saem em segundos, o último leva cerca de 3 dias e a loja completa cerca de 1 semana.
+- **16 níveis com memes BR**, de NPC a O Próprio 67, passando por Cria, Brabo, O Pai Tá On, Mega Brain e Coop Thief.
+- **Combo de cliques:** clicar rápido multiplica a aura até ×3.
+- **Cérebro Dourado:** aparece de vez em quando; pegar ativa o *Modo Mega Brain*, com HUD estilo Jarvis e ×7 em toda a aura por 67 segundos.
+- **Ladrão do Coop Thief:** a partir do nível 8, um ladrãozinho atravessa a tela; pegar rende Fichas 67.
+- **Loja com 6 upgrades**, cada um com limite de compras.
+- **Fichas 67, conquistas e login diário:** 15 conquistas e uma recompensa por dias seguidos jogando.
+- **Loja de enfeites:** 16 itens entre fundos, chapéus, óculos, roupas e cores para o Clawd, pagos com Fichas 67.
+- **Prestígio:** no último nível dá para renascer com +25% de aura para sempre.
+- **Ranking global** com o Top 10, quem está perto de você e um aviso de quanto falta para passar o próximo. Os enfeites de cada jogador aparecem no ranking.
 - **Progresso offline:** o Clawd continua farmando enquanto você está fora, até 12 horas.
-- **Ranking global** com apelido, calculado no servidor e protegido contra trapaça.
-- **Golpes críticos:** 10% de chance base, até 40% com upgrades, valendo 10 vezes mais.
-- **Efeitos visuais que se acumulam:** holofote, óculos, anel arco-íris, coroa, asas, raios, clones e chuva de 67.
-- **Efeitos sonoros 8-bit** sintetizados no navegador, com botão de mudo.
-- **Acessível:** dá para jogar pelo teclado (`Enter` ou `Espaço` sobre o Clawd), e as animações são desligadas quando o sistema pede movimento reduzido.
-- **Responsivo:** no celular, a loja abre como gaveta.
+- **Efeitos sonoros 8-bit** sintetizados no navegador (fanfarras por nível, reator do Mega Brain, ladrão, conquistas), com botão de mudo.
+- **Seguro contra trapaça:** no modo online, o servidor calcula tudo.
+- **Acessível e responsivo:** dá para jogar pelo teclado, as animações respeitam o movimento reduzido e, no celular, a loja abre como gaveta.
 
 ## Como jogar
 
-1. Clique no Clawd ou no botão **FARMAR AURA**.
+1. Clique no Clawd ou no botão **FARMAR AURA**. Clicar rápido enche o **combo**.
 2. Gaste a aura na **loja**. Os upgrades de aura por segundo continuam rendendo mesmo com o jogo fechado.
-3. O nível é definido pela **aura total farmada**, então gastar na loja não faz você cair de nível.
-4. Abra o **Ranking**, escolha um apelido e veja sua posição.
-5. **Zerar aura** recomeça o progresso, mas seu recorde continua no ranking.
+3. Fique de olho no **Cérebro Dourado** voando pela tela e, a partir do nível Coop Thief, no **ladrão**.
+4. Junte **Fichas 67** com conquistas, login diário e ladrões, e gaste em **enfeites**.
+5. O nível é definido pela aura farmada nesta vida, então gastar na loja não faz você cair de nível.
+6. No último nível, **renasça** para ganhar +25% permanente.
+7. Abra o **Ranking**, escolha um apelido e veja quem está logo à sua frente.
 
 ## Níveis
 
-A economia foi calibrada por simulação. Os tempos abaixo são de um jogador com 3 sessões de 40 minutos por dia; quem joga menos chega um pouco depois, porque a aura passiva faz a maior parte do trabalho.
+A economia foi calibrada por simulação. Os tempos abaixo são de um jogador com 3 sessões de 40 minutos por dia, clicando 4 vezes por segundo e pegando os Cérebros Dourados. Quem joga menos chega um pouco depois, porque a aura passiva faz a maior parte do trabalho.
 
 | # | Nível | Aura total | Tempo aproximado | Efeito |
 |--:|---|--:|--:|---|
 | 0 | NPC | 0 | início | nenhum |
-| 1 | Figurante | 270 mil | 1 min | brilho fraco |
-| 2 | Main character | 3,6 mi | 5 min | holofote |
-| 3 | Sigma | 26 mi | 20 min | óculos escuros e fundo roxo |
-| 4 | Aura infinita | 67 mi | 1 h | anel arco-íris |
-| 5 | Lenda do 6-7 | 91 mi | 3 h | coroa e fogo |
-| 6 | Ascendido | 130 mi | 6 h | asas e céu estrelado |
-| 7 | Deus do 6-7 | 1,2 bi | 12 h | Clawd dourado, raios e tela tremendo |
-| 8 | Multiverso | 7,5 bi | 1 dia | clones e um 67 gigante ao fundo |
-| 9 | Clawd Supremo | 44 bi | 2 dias | cores da tela girando |
-| 10 | O Próprio 67 | 150 bi | 3 dias | chuva de 67 |
+| 1 | Figurante | 66 mil | 20 s | brilho fraco |
+| 2 | Cria | 400 mil | 1 min | brilho mais forte |
+| 3 | Brabo | 1,8 mi | 2,5 min | sobrancelhas bravas |
+| 4 | O Pai Tá On | 17 mi | 5 min | corrente de ouro |
+| 5 | Main character | 28 mi | 10 min | holofote |
+| 6 | Sigma | 90 mi | 20 min | óculos escuros e fundo roxo |
+| 7 | Mega Brain | 270 mi | 40 min | cérebro gigante com sinapses |
+| 8 | Coop Thief | 390 mi | 1,5 h | saco de aura roubada e o evento do ladrão |
+| 9 | Aura infinita | 650 mi | 3 h | anel arco-íris |
+| 10 | Lenda do 6-7 | 1,2 bi | 6 h | coroa e fogo |
+| 11 | Ascendido | 4,6 bi | 12 h | asas e céu estrelado |
+| 12 | Deus do 6-7 | 15 bi | 1 dia | Clawd dourado, raios e tela tremendo |
+| 13 | Multiverso | 45 bi | 40 h | clones e um 67 gigante ao fundo |
+| 14 | Clawd Supremo | 98 bi | 56 h | cores da tela girando |
+| 15 | O Próprio 67 | 270 bi | 3 dias | chuva de 67 |
 
-Cada nível também dá +15% em toda a aura.
+Cada nível dá +10% em toda a aura, e cada prestígio mais +25%.
 
 ## Loja
 
-O preço de cada upgrade sobe a cada compra. Completar todos leva cerca de 1 semana.
+Paga com aura. O preço de cada upgrade sobe a cada compra, e completar todos leva cerca de 1 semana.
 
 | Upgrade | Efeito por compra | Preço inicial | Aumento por compra | Limite |
 |---|---|--:|--:|--:|
@@ -74,17 +88,31 @@ O preço de cada upgrade sobe a cada compra. Completar todos leva cerca de 1 sem
 | Olhar sigma | +3% de chance de crítico | 5 mil | ×2,2 | 10 |
 | Fábrica de 67 | +60 de aura por segundo | 20 mil | ×1,22 | 30 |
 | Datacenter do Clawd | +4.000 de aura por segundo | 20 mi | ×1,25 | 30 |
-| Aura cósmica | dobra toda a aura | 2,7 bi | ×5 | 5 |
+| Aura cósmica | dobra toda a aura | 3,2 bi | ×5 | 5 |
+
+## Eventos, conquistas e enfeites
+
+| Evento | Quando | O que dá |
+|---|---|---|
+| Cérebro Dourado | a cada 3 a 8 min, fica 13 s na tela | Modo Mega Brain: ×7 em toda a aura por 67 s |
+| Ladrão | a partir do nível 8, a cada 4 a 10 min, fica 8 s na tela | 3 Fichas 67 |
+| Login diário | primeiro acesso do dia (horário de Brasília) | 5 fichas × dias seguidos, até 35 |
+| Combo | clicando mais de 3 vezes por segundo | até ×3 por clique, a 12 cliques/s |
+
+As **15 conquistas** vão de "Seis sete" (67 cliques) a "Uma semana de aura" (7 dias seguidos) e dão de 5 a 50 fichas cada. A lista fica em [`src/achievements.ts`](src/achievements.ts).
+
+A **loja de enfeites** tem 16 itens em 5 categorias (fundo, chapéu, rosto, roupa e cor), de 15 a 120 fichas. Entre eles estão a Favela neon, a Praia de Copacabana, o Capacete Mega Brain, os Óculos Juliet e a Camisa da seleção. O catálogo fica em [`src/cosmetics.ts`](src/cosmetics.ts).
 
 ## Ranking e segurança
 
-No modo online, **quem calcula a aura é o servidor**. O navegador nunca envia "tenho X de aura": ele envia só eventos ("cliquei", "comprei tal upgrade"), e o banco aplica as mesmas regras do jogo.
+No modo online, **quem calcula tudo é o servidor**. O navegador nunca envia "tenho X de aura" ou "tenho Y fichas": ele envia só eventos ("cliquei", "peguei o cérebro", "comprei tal item"), e o banco aplica as mesmas regras do jogo.
 
-- Cliques são limitados a 15 por segundo, com rajada de até 60. Um robô de cliques não passa disso.
-- A aura passiva é calculada pelo relógio do servidor, com teto de 12 horas offline.
+- Cliques são limitados a 15 por segundo, com rajada de até 60, e o combo vem da taxa que o servidor mede.
+- Aura passiva, Cérebro Dourado, ladrão e login diário usam o relógio do servidor. O cérebro e o ladrão só valem dentro da janela em que aparecem.
 - Críticos são rolados no servidor.
+- Fichas, conquistas e enfeites também são do servidor: não dá para comprar sem saldo, equipar o que não tem ou ganhar a mesma conquista duas vezes.
 - A tabela não pode ser lida nem alterada diretamente pela API. Tudo passa por funções que conferem o segredo do jogador.
-- Apelidos são validados no servidor e exibidos como texto, nunca como HTML.
+- Apelidos são validados no servidor e exibidos como texto, nunca como HTML. Os enfeites de outros jogadores só são desenhados se existirem no catálogo do jogo.
 - O site publicado tem Content Security Policy: só roda scripts do próprio site e só conversa com o Supabase.
 
 Os detalhes e os limites conhecidos estão em [SECURITY.md](SECURITY.md).
@@ -127,6 +155,18 @@ cat supabase/test-setup.sql supabase/schema.sql supabase/test.sql \
 
 A chave anon é pública por design e pode ficar no site. **Nunca** use a chave `service_role` no front-end.
 
+## Painel dev
+
+Com `npm run dev`, aparece um botão 🛠 no canto inferior esquerdo. Ele abre um painel para testar o jogo sem farmar:
+
+- subir e descer de nível, ou pular direto para qualquer um;
+- ganhar aura e Fichas 67, completar a loja e liberar todos os enfeites;
+- forçar o Cérebro Dourado e o ladrão;
+- simular um novo dia (login diário) e ir ao nível máximo (prestígio);
+- zerar tudo.
+
+O painel **não existe no build de produção**: o Vite remove o código, então ninguém consegue usá-lo no site publicado. Se o ranking estiver configurado, o painel entra em **modo sandbox** e para de sincronizar, para nunca alterar o servidor.
+
 ## Estrutura do projeto
 
 ```
@@ -134,9 +174,14 @@ A chave anon é pública por design e pode ficar no site. **Nunca** use a chave 
 ├── index.html               # marcação: palco, mascote em SVG, HUD, loja e ranking
 ├── public/favicon.svg       # ícone do jogo
 ├── src/
-│   ├── main.ts              # liga o DOM às regras: render, cliques, loja, ranking
-│   ├── game.ts              # regras puras: níveis, ganhos, críticos, upgrades
+│   ├── main.ts              # liga o DOM às regras: render, cliques, eventos, menu
+│   ├── game.ts              # regras puras: níveis, ganhos, combo, eventos, prestígio
+│   ├── achievements.ts      # conquistas
+│   ├── cosmetics.ts         # catálogo e desenhos dos enfeites
+│   ├── mini.ts              # mini Clawd com enfeites (prévia e ranking)
+│   ├── dev.ts               # painel dev (só em npm run dev)
 │   ├── game.test.ts         # testes das regras, incluindo paridade com o servidor
+│   ├── schema-sync.test.ts  # falha se game.ts e schema.sql divergirem
 │   ├── online.ts            # cliente do Supabase: envio de eventos em lote e ranking
 │   ├── storage.ts           # save local e identidade do jogador
 │   ├── sound.ts             # efeitos sonoros com Web Audio
@@ -144,7 +189,7 @@ A chave anon é pública por design e pode ficar no site. **Nunca** use a chave 
 │   └── style.css            # visual e efeitos por nível (classes l1 a l10)
 ├── supabase/
 │   ├── schema.sql           # tabela, regras do jogo no servidor e permissões
-│   ├── test.sql             # testes do servidor (permissões, limites, paridade)
+│   ├── test.sql             # testes do servidor (permissões, limites, eventos, paridade)
 │   └── test-setup.sql       # papéis do Supabase para testar num Postgres puro
 ├── .github/
 │   ├── workflows/deploy.yml # testes, build e publicação no GitHub Pages
@@ -181,7 +226,7 @@ Contribuições são bem-vindas.
 4. Envie a branch: `git push origin minha-feature`.
 5. Abra um Pull Request.
 
-Mudou alguma regra do jogo em `src/game.ts`? Espelhe a mudança em `supabase/schema.sql`, senão o ranking diverge do que o jogador vê. O teste de paridade nos dois lados avisa quando isso acontece.
+Mudou alguma regra do jogo em `src/game.ts`, `src/achievements.ts` ou `src/cosmetics.ts`? Espelhe a mudança em `supabase/schema.sql`, senão o ranking diverge do que o jogador vê. O `src/schema-sync.test.ts` e os testes de paridade avisam quando isso acontece.
 
 Bugs e sugestões podem ser enviados pelas [issues](https://github.com/EuGabrielNolasco/clawd-aura-farm/issues). Para falhas de segurança, veja o [SECURITY.md](SECURITY.md).
 

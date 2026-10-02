@@ -1,12 +1,15 @@
 // Painel de desenvolvimento. Só é carregado com `npm run dev` (import.meta.env.DEV):
 // o build de produção não inclui este arquivo, então ninguém usa isso no site publicado.
 
+import { COSMETICS } from "./cosmetics";
 import { earn, levelOf, RANKS, UPGRADES, type State } from "./game";
 
 export interface DevHooks {
   state: () => State;
   render: () => void;
   toast: (msg: string) => void;
+  /** Relógio do jogo (segundos Unix, já ajustado ao servidor no online). */
+  now: () => number;
   /** Pausa a sincronização com o servidor. Nulo quando o jogo está em modo local. */
   pauseSync: (() => void) | null;
 }
@@ -42,6 +45,9 @@ export function mountDev(h: DevHooks) {
       ${RANKS.map(([, n], i) => `<option value="${i}">${i} · ${n}</option>`).join("")}
     </select>
     <div class="dev-row"><button data-a="aura">+aura ×10</button><button data-a="shop">completar loja</button></div>
+    <div class="dev-row"><button data-a="golden">🧠 cérebro</button><button data-a="thief">🦹 ladrão</button></div>
+    <div class="dev-row"><button data-a="tokens">+50 fichas</button><button data-a="cosmetics">todos enfeites</button></div>
+    <div class="dev-row"><button data-a="day">+1 dia</button><button data-a="max">nível máx</button></div>
     <button data-a="zero">zerar tudo</button>
   `;
   document.body.append(btn, panel);
@@ -65,6 +71,7 @@ export function mountDev(h: DevHooks) {
     l = Math.max(0, Math.min(RANKS.length - 1, l));
     s.total = RANKS[l][0];
     s.aura = Math.min(s.aura, s.total);
+    s.lifetime = Math.max(s.lifetime, s.total);
     h.render();
   }
 
@@ -74,9 +81,27 @@ export function mountDev(h: DevHooks) {
     goto: () => goTo(Number(select.value)),
     aura: () => { const s = h.state(); earn(s, Math.max(1e4, s.aura * 9)); h.render(); },
     shop: () => { const s = h.state(); for (const u of UPGRADES) s.upgrades[u.id] = u.max; h.render(); },
+    golden: () => { h.state().goldenAt = h.now(); h.render(); },
+    thief: () => {
+      const s = h.state();
+      if (levelOf(s.total) < 8) goTo(8);
+      s.thiefAt = h.now();
+      h.render();
+    },
+    tokens: () => { h.state().tokens += 50; h.render(); },
+    cosmetics: () => { const s = h.state(); s.owned = COSMETICS.map(c => c.id); h.render(); },
+    // finge que o último login foi ontem: o próximo tick dá a recompensa do dia e soma na sequência
+    day: () => {
+      const s = h.state();
+      if (s.lastDay) s.lastDay = new Date(Date.parse(s.lastDay) - 86_400_000).toISOString().slice(0, 10);
+      h.render();
+    },
+    max: () => goTo(RANKS.length - 1),
     zero: () => {
       const s = h.state();
-      s.aura = s.total = 0;
+      s.aura = s.total = s.lifetime = s.tokens = s.prestige = 0;
+      s.clicks = s.crits = s.goldens = s.thieves = s.streak = 0;
+      s.achievements = []; s.owned = []; s.equipped = {}; s.buffUntil = 0;
       for (const u of UPGRADES) s.upgrades[u.id] = 0;
       h.render();
     },

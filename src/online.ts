@@ -1,20 +1,26 @@
 // Cliente do ranking no Supabase. Fala direto com a API REST (PostgREST), sem SDK.
 // O navegador só manda eventos; quem calcula a aura é o servidor (supabase/schema.sql).
 
-import { RNG_MOD, UPGRADES, type State } from "./game";
-import type { Player } from "./storage";
+import { UPGRADES, type State } from "./game";
+import { sanitize, type Player } from "./storage";
 
 const URL_ = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 const KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
 
 export const onlineEnabled = Boolean(URL_ && KEY);
 
+/** Resposta do aura_sync (nomes em snake_case, como o servidor manda). */
 export interface ServerState {
-  aura: number; total: number; best: number; ups: number[]; rng: number;
-  name: string | null; rank: number | null; offline: number; offline_gain: number;
+  now: number;
+  aura: number; total: number; lifetime: number; ups: number[]; rng: number;
+  prestige: number; tokens: number; clicks: number; crits: number; goldens: number; thieves: number;
+  streak: number; last_day: string | null; achievements: string[]; owned: string[]; equipped: Record<string, string>;
+  golden_at: number | null; buff_until: number; thief_at: number | null; combo: number;
+  name: string | null; rank: number | null; ahead: { name: string; lifetime: number; rank: number } | null;
+  daily: number; new_achievements: string[]; offline: number; offline_gain: number;
 }
 
-export interface TopEntry { name: string; best: number }
+export interface RankRow { rank: number; name: string; lifetime: number; prestige: number; equipped: Record<string, string>; me?: boolean }
 
 async function rpc<T>(fn: string, body: object, keepalive = false): Promise<T> {
   const res = await fetch(`${URL_}/rest/v1/rpc/${fn}`, {
@@ -31,11 +37,14 @@ async function rpc<T>(fn: string, body: object, keepalive = false): Promise<T> {
 
 /** Converte a resposta do servidor em State, validando tudo que chega. */
 export function toState(r: ServerState): State {
-  const n = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : 0);
-  const upgrades = {} as State["upgrades"];
-  UPGRADES.forEach((u, i) => { upgrades[u.id] = Math.min(Math.floor(n(r.ups?.[i])), u.max); });
-  const rng = Math.floor(n(r.rng));
-  return { aura: n(r.aura), total: n(r.total), upgrades, rng: rng >= 1 && rng < RNG_MOD ? rng : 1 };
+  const upgrades: Record<string, unknown> = {};
+  UPGRADES.forEach((u, i) => { upgrades[u.id] = r.ups?.[i]; });
+  return sanitize({
+    aura: r.aura, total: r.total, lifetime: r.lifetime, upgrades, rng: r.rng,
+    goldenAt: r.golden_at ?? 0, buffUntil: r.buff_until, thiefAt: r.thief_at ?? 0,
+    prestige: r.prestige, tokens: r.tokens, clicks: r.clicks, crits: r.crits, goldens: r.goldens, thieves: r.thieves,
+    streak: r.streak, lastDay: r.last_day, achievements: r.achievements, owned: r.owned, equipped: r.equipped,
+  });
 }
 
 const MAX_QUEUE = 1000;
@@ -77,12 +86,13 @@ export function createSync(p: Player, onSync: (r: ServerState, pending: string) 
   });
 
   return {
-    push(code: string) { if (!paused && queue.length < MAX_QUEUE) queue += code; },
+    /** Enfileira um evento (com o argumento, para os de enfeite). */
+    push(code: string) { if (!paused && queue.length + code.length <= MAX_QUEUE) queue += code; },
     /** Para de sincronizar até recarregar a página (usado pelo painel dev). */
     pause() { paused = true; queue = ""; },
     flush,
     setName: (name: string) => rpc<void>("aura_set_name", { p_id: p.id, p_secret: p.secret, p_name: name }),
-    reset: async () => { queue = ""; await rpc<void>("aura_reset", { p_id: p.id, p_secret: p.secret }); await flush(); },
-    top: () => rpc<TopEntry[]>("aura_top", { p_limit: 10 }),
+    top: () => rpc<RankRow[]>("aura_top", { p_limit: 10 }),
+    around: () => rpc<RankRow[]>("aura_around", { p_id: p.id, p_secret: p.secret }),
   };
 }

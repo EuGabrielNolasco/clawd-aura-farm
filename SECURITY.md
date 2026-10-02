@@ -14,6 +14,12 @@ O jogo roda no navegador, e qualquer coisa que o navegador envia pode ser forjad
 | Robô de cliques ou requisições forjadas | Balde de fichas no servidor: 15 cliques por segundo, rajada de 60. Cliques acima disso são descartados. No máximo 1000 eventos por chamada. |
 | Adiantar o relógio para ganhar aura passiva | A aura passiva usa o relógio do servidor, com teto de 12 h. |
 | Forçar críticos | Os críticos são rolados no servidor. |
+| Inflar o combo | O combo vem da taxa de cliques aceitos que o servidor mede em cada lote, contados com o mesmo parse dos eventos. |
+| Forjar Cérebro Dourado ou ladrão | O servidor agenda os dois e só aceita o clique dentro da janela em que aparecem (mais 4 s de folga para o atraso da rede). |
+| Ganhar fichas, conquistas ou enfeites | Fichas só vêm de login diário (uma vez por dia, horário do servidor), conquistas (uma vez cada) e ladrões. Compra e equipamento de enfeites são conferidos no servidor. |
+| Renascer antes da hora | O prestígio só é aceito no nível máximo. |
+| HTML malicioso nos enfeites de outro jogador | O ranking só desenha enfeites que existem no catálogo do jogo; ids desconhecidos são descartados. |
+| Usar o painel dev no site | O painel só existe em `npm run dev`; o Vite o remove do build de produção. |
 | Ler ou alterar a tabela direto pela API | RLS ligado, sem policies e sem grants para `anon`/`authenticated`. Só as funções `aura_*` públicas são acessíveis. |
 | Usar a conta de outro jogador | Cada jogador tem um segredo aleatório de 256 bits, guardado só no navegador dele. O servidor guarda apenas o hash SHA-256. |
 | XSS pelo apelido | Apelido validado no servidor (3 a 20 letras, números, espaço, `_ . -`) e exibido com `textContent`. O site publicado tem Content Security Policy. |

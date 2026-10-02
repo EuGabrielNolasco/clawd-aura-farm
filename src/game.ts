@@ -1,8 +1,11 @@
 // Regras do jogo, sem DOM. As mesmas regras rodam no servidor (supabase/schema.sql):
 // qualquer mudança aqui precisa ser espelhada lá, senão o ranking diverge do que o jogador vê.
+// src/schema-sync.test.ts confere as constantes e src/game.test.ts a paridade dos cálculos.
 //
 // Economia calibrada por simulação (3 sessões de 40 min por dia, 4 cliques/s, pegando os
 // Cérebros Dourados): primeiros níveis em segundos, nível máximo em ~3 dias e loja em ~1 semana.
+
+import { cosmeticByCode, slotByCode, type Slot } from "./cosmetics";
 
 /** [aura total mínima, nome]. */
 export const RANKS: readonly (readonly [number, string])[] = [
@@ -23,8 +26,23 @@ export const BASE_PASSIVE = 2;
 export const LEVEL_BONUS = 1.1;
 export const CRIT_MULT = 10;
 export const BASE_CRIT = 0.1;
+/** Bônus permanente por prestígio (renascer). */
+export const PRESTIGE_BONUS = 0.25;
 /** Máximo de aura passiva creditada enquanto o jogador está fora. */
 export const OFFLINE_CAP_S = 12 * 3600;
+
+/** Combo pela taxa de cliques: ×1 até 3 cliques/s, subindo até ×3 a 12 cliques/s. */
+export const comboFor = (clicksPerSecond: number) => 1 + 2 * Math.min(Math.max((clicksPerSecond - 3) / 9, 0), 1);
+
+/**
+ * Eventos que aparecem na tela por alguns segundos. O servidor aceita o clique até `slack`
+ * segundos depois do fim da janela visível, para cobrir o atraso do lote de eventos.
+ */
+export const GOLDEN = { min: 180, max: 480, show: 13, slack: 4 } as const;
+export const THIEF = { min: 240, max: 600, show: 8, slack: 4, tokens: 3 } as const;
+/** Modo Mega Brain, ativado pelo Cérebro Dourado. */
+export const BUFF_S = 67;
+export const BUFF_MULT = 7;
 
 export type UpgradeId = "aux" | "click" | "crit" | "fab" | "dc" | "cosmic";
 
@@ -49,16 +67,40 @@ export const UPGRADES: readonly Upgrade[] = [
   { id: "cosmic", code: "x", name: "Aura cósmica", desc: "Dobra toda a aura", baseCost: 3.2e9, growth: 5, max: 5 },
 ];
 
-export const CLICK_CODE = "c";
+/**
+ * Protocolo de eventos (uma letra cada, menos os enfeites, que levam a letra do item ou do slot):
+ *   c clique · g Cérebro Dourado · t ladrão · a m s f d x compra de upgrade · p renascer · z zerar
+ *   K<item> comprar enfeite · E<item> equipar · U<slot> tirar
+ */
+export const EV = { click: "c", golden: "g", thief: "t", prestige: "p", reset: "z", buyCosmetic: "K", equip: "E", unequip: "U" } as const;
 
 export interface State {
   /** Saldo que pode ser gasto na loja. */
   aura: number;
-  /** Tudo que já foi farmado. Define o nível, então gastar não faz cair de nível. */
+  /** Farmado nesta vida. Define o nível, então gastar não faz cair de nível. */
   total: number;
+  /** Farmado em todas as vidas. É o que conta no ranking. */
+  lifetime: number;
   upgrades: Record<UpgradeId, number>;
   /** Estado do gerador de críticos, compartilhado com o servidor para os dois rolarem igual. */
   rng: number;
+  /** Segundos Unix: próximo Cérebro Dourado, fim do Modo Mega Brain, próximo ladrão (0 = não agendado). */
+  goldenAt: number;
+  buffUntil: number;
+  thiefAt: number;
+  prestige: number;
+  /** Fichas 67, a moeda dos enfeites. */
+  tokens: number;
+  clicks: number;
+  crits: number;
+  goldens: number;
+  thieves: number;
+  /** Dias seguidos jogando e o último dia contado (AAAA-MM-DD, horário de Brasília). */
+  streak: number;
+  lastDay: string | null;
+  achievements: string[];
+  owned: string[];
+  equipped: Partial<Record<Slot, string>>;
 }
 
 export const RNG_MOD = 2147483647;
@@ -68,9 +110,15 @@ export const nextRng = (r: number) => (r * 48271) % RNG_MOD;
 
 export const randomSeed = () => 1 + Math.floor(Math.random() * (RNG_MOD - 2));
 
+export const nowSec = () => Date.now() / 1000;
+
+const zeroUpgrades = (): Record<UpgradeId, number> => ({ aux: 0, click: 0, crit: 0, fab: 0, dc: 0, cosmic: 0 });
+
 export const newState = (rng = randomSeed()): State => ({
-  aura: 0, total: 0, rng,
-  upgrades: { aux: 0, click: 0, crit: 0, fab: 0, dc: 0, cosmic: 0 },
+  aura: 0, total: 0, lifetime: 0, upgrades: zeroUpgrades(), rng,
+  goldenAt: 0, buffUntil: 0, thiefAt: 0, prestige: 0, tokens: 0,
+  clicks: 0, crits: 0, goldens: 0, thieves: 0, streak: 0, lastDay: null,
+  achievements: [], owned: [], equipped: {},
 });
 
 export function levelOf(total: number): number {
@@ -79,8 +127,12 @@ export function levelOf(total: number): number {
   return l;
 }
 
-const mult = (s: State) => LEVEL_BONUS ** levelOf(s.total) * 2 ** s.upgrades.cosmic;
+const mult = (s: State) =>
+  LEVEL_BONUS ** levelOf(s.total) * 2 ** s.upgrades.cosmic * (1 + PRESTIGE_BONUS * s.prestige);
 
+export const buffActive = (s: State, now: number) => now < s.buffUntil;
+
+/** Ganho de um clique sem crítico, sem combo e sem Mega Brain. */
 export const clickGain = (s: State) => BASE_CLICK * (1 + 0.5 * s.upgrades.click) * mult(s);
 
 export const critChance = (s: State) => BASE_CRIT + 0.03 * s.upgrades.crit;
@@ -91,27 +143,71 @@ export const passivePerSecond = (s: State) =>
 export function earn(s: State, amount: number) {
   s.aura += amount;
   s.total += amount;
+  s.lifetime += amount;
 }
 
-/** Credita aura passiva, recalculando o ganho quando um nível é atingido no meio do período. */
-export function passive(s: State, seconds: number) {
-  let left = Math.min(seconds, OFFLINE_CAP_S);
-  for (let i = 0; left > 0 && i < 20; i++) {
-    const l = levelOf(s.total), rate = passivePerSecond(s);
+/**
+ * Credita aura passiva do período que termina em `end`. O ganho é recalculado quando um nível
+ * é atingido e quando o Modo Mega Brain acaba no meio do período.
+ */
+export function passive(s: State, seconds: number, end = nowSec()) {
+  let t = end - Math.min(Math.max(seconds, 0), OFFLINE_CAP_S);
+  for (let i = 0; t < end && i < 40; i++) {
+    const l = levelOf(s.total), buffed = t < s.buffUntil;
+    const rate = passivePerSecond(s) * (buffed ? BUFF_MULT : 1);
     const next = RANKS[l + 1];
-    const dt = next ? Math.min(left, Math.max((next[0] - s.total) / rate, 0.001)) : left;
+    let dt = end - t;
+    if (next) dt = Math.min(dt, Math.max((next[0] - s.total) / rate, 0.001));
+    if (buffed) dt = Math.min(dt, s.buffUntil - t);
     earn(s, rate * dt);
-    left -= dt;
+    t += dt;
   }
 }
 
-export function click(s: State) {
+export function click(s: State, combo = 1, now = nowSec()) {
   s.rng = nextRng(s.rng);
   const crit = s.rng / RNG_MOD < critChance(s);
-  const gain = clickGain(s) * (crit ? CRIT_MULT : 1);
+  const gain = clickGain(s) * (crit ? CRIT_MULT : 1) * combo * (buffActive(s, now) ? BUFF_MULT : 1);
   earn(s, gain);
+  s.clicks++;
+  if (crit) s.crits++;
   return { gain, crit };
 }
+
+// ===== eventos na tela =====
+
+type Timed = { min: number; max: number; show: number; slack: number };
+const inWindow = (at: number, ev: Timed, now: number, slack: number) => at > 0 && now >= at && now <= at + ev.show + slack;
+
+export const goldenVisible = (s: State, now: number) => inWindow(s.goldenAt, GOLDEN, now, 0);
+export const thiefVisible = (s: State, now: number) => levelOf(s.total) >= LV.coopThief && inWindow(s.thiefAt, THIEF, now, 0);
+
+/** Agenda o próximo Cérebro Dourado e o próximo ladrão quando o atual já passou. No online, quem agenda é o servidor. */
+export function schedule(s: State, now: number, rand = Math.random) {
+  const next = (ev: Timed) => now + ev.min + rand() * (ev.max - ev.min);
+  if (s.goldenAt === 0 || now > s.goldenAt + GOLDEN.show + GOLDEN.slack) s.goldenAt = next(GOLDEN);
+  if (s.thiefAt === 0 || now > s.thiefAt + THIEF.show + THIEF.slack) s.thiefAt = next(THIEF);
+}
+
+/** Pega o Cérebro Dourado se ele estiver na janela; ativa o Modo Mega Brain. */
+export function catchGolden(s: State, now: number, rand = Math.random): boolean {
+  if (!inWindow(s.goldenAt, GOLDEN, now, GOLDEN.slack)) return false;
+  s.buffUntil = now + BUFF_S;
+  s.goldenAt = now + BUFF_S + GOLDEN.min + rand() * (GOLDEN.max - GOLDEN.min);
+  s.goldens++;
+  return true;
+}
+
+/** Pega o ladrão (só a partir do nível Coop Thief); rende Fichas 67. */
+export function catchThief(s: State, now: number, rand = Math.random): boolean {
+  if (levelOf(s.total) < LV.coopThief || !inWindow(s.thiefAt, THIEF, now, THIEF.slack)) return false;
+  s.tokens += THIEF.tokens;
+  s.thieves++;
+  s.thiefAt = now + THIEF.min + rand() * (THIEF.max - THIEF.min);
+  return true;
+}
+
+// ===== loja =====
 
 export const upgrade = (id: UpgradeId) => UPGRADES.find(u => u.id === id)!;
 
@@ -133,10 +229,95 @@ export function buy(s: State, id: UpgradeId): boolean {
 
 export const allMaxed = (s: State) => UPGRADES.every(u => isMaxed(s, u.id));
 
-/** Aplica um evento do protocolo ("c" = clique, letra de upgrade = compra). */
-export function applyEvent(s: State, code: string) {
-  if (code === CLICK_CODE) return click(s);
+// ===== prestígio e zerar =====
+
+export const canPrestige = (s: State) => levelOf(s.total) >= LV.max;
+
+/** Começa uma vida nova. Mantém o que é permanente: aura vitalícia, fichas, enfeites, conquistas. */
+function newLife(s: State) {
+  s.aura = 0;
+  s.total = 0;
+  s.upgrades = zeroUpgrades();
+  s.buffUntil = 0;
+}
+
+export function prestige(s: State): boolean {
+  if (!canPrestige(s)) return false;
+  newLife(s);
+  s.prestige++;
+  return true;
+}
+
+// ===== enfeites =====
+
+export function buyCosmetic(s: State, code: string): boolean {
+  const c = cosmeticByCode(code);
+  if (!c || s.owned.includes(c.id) || s.tokens < c.price) return false;
+  s.tokens -= c.price;
+  s.owned.push(c.id);
+  return true;
+}
+
+export function equip(s: State, code: string): boolean {
+  const c = cosmeticByCode(code);
+  if (!c || !s.owned.includes(c.id)) return false;
+  s.equipped[c.slot] = c.id;
+  return true;
+}
+
+export function unequip(s: State, slotCode: string): boolean {
+  const slot = slotByCode(slotCode);
+  if (!slot) return false;
+  delete s.equipped[slot];
+  return true;
+}
+
+// ===== login diário =====
+
+/** Dia de hoje no horário de Brasília (AAAA-MM-DD), igual ao servidor. */
+export const todayBR = (date = new Date()) =>
+  new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(date);
+
+const dayDiff = (a: string, b: string) => Math.round((Date.parse(b) - Date.parse(a)) / 86_400_000);
+
+/** Recompensa do primeiro acesso do dia: 5 fichas × dias seguidos, até 7. Devolve as fichas dadas. */
+export function daily(s: State, today: string): number {
+  if (s.lastDay === today) return 0;
+  s.streak = s.lastDay && dayDiff(s.lastDay, today) === 1 ? s.streak + 1 : 1;
+  s.lastDay = today;
+  const reward = 5 * Math.min(s.streak, 7);
+  s.tokens += reward;
+  return reward;
+}
+
+// ===== protocolo =====
+
+/** Aplica um evento e devolve o resultado do clique, quando for um. */
+export function applyEvent(s: State, code: string, arg = "", combo = 1, now = nowSec()) {
+  switch (code) {
+    case EV.click: return click(s, combo, now);
+    case EV.golden: catchGolden(s, now); return null;
+    case EV.thief: catchThief(s, now); return null;
+    case EV.prestige: prestige(s); return null;
+    case EV.reset: newLife(s); return null;
+    case EV.buyCosmetic: buyCosmetic(s, arg); return null;
+    case EV.equip: equip(s, arg); return null;
+    case EV.unequip: unequip(s, arg); return null;
+  }
   const u = UPGRADES.find(x => x.code === code);
   if (u) buy(s, u.id);
   return null;
+}
+
+/** Eventos que levam um caractere de argumento logo depois. */
+export const takesArg = (code: string) => code === EV.buyCosmetic || code === EV.equip || code === EV.unequip;
+
+/** Divide uma fila de eventos em [código, argumento]. */
+export function parseEvents(events: string): [string, string][] {
+  const out: [string, string][] = [];
+  for (let i = 0; i < events.length; i++) {
+    const code = events[i];
+    if (takesArg(code)) { out.push([code, events[i + 1] ?? ""]); i++; } else out.push([code, ""]);
+  }
+  return out;
 }

@@ -1,12 +1,16 @@
 import "./style.css";
+import { ACHIEVEMENTS, checkAchievements } from "./achievements";
+import { COSMETICS, cosmeticById, SLOTS, type Slot } from "./cosmetics";
 import {
-  allMaxed, applyEvent, canBuy, CLICK_CODE, clickGain, costOf, isMaxed, LEVEL_BONUS, levelOf,
-  LV, newState, passive, passivePerSecond, RANKS, UPGRADES, type State,
+  allMaxed, applyEvent, buffActive, canBuy, canPrestige, clickGain, comboFor, costOf, daily, EV,
+  goldenVisible, isMaxed, LEVEL_BONUS, levelOf, LV, nowSec, parseEvents, passive, passivePerSecond,
+  PRESTIGE_BONUS, RANKS, schedule, thiefVisible, THIEF, todayBR, UPGRADES, type State,
 } from "./game";
 import { createFx, reduceMotion } from "./fx";
-import { createSync, onlineEnabled, toState, type ServerState } from "./online";
+import { clawdSvg } from "./mini";
+import { createSync, onlineEnabled, toState, type RankRow, type ServerState } from "./online";
 import { sfx, setMuted } from "./sound";
-import { load, loadMuted, player, save, saveMuted } from "./storage";
+import { load, loadMuted, player, sanitize, save, saveMuted } from "./storage";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const stage = $("stage"), mascot = $("mascot");
@@ -27,28 +31,62 @@ function replay(el: HTMLElement, cls: string) {
   el.classList.add(cls);
 }
 
-let toastTimer = 0;
+// ===== avisos em fila, para um não apagar o outro =====
+const toasts: string[] = [];
+let toastBusy = false;
 function toast(msg: string) {
-  const t = $("toast");
+  toasts.push(msg);
+  if (!toastBusy) nextToast();
+}
+function nextToast() {
+  const t = $("toast"), msg = toasts.shift();
+  if (!msg) { toastBusy = false; t.classList.remove("show"); return; }
+  toastBusy = true;
   t.textContent = msg;
   t.classList.add("show");
-  clearTimeout(toastTimer);
-  toastTimer = window.setTimeout(() => t.classList.remove("show"), 4500);
+  setTimeout(nextToast, 3800);
+}
+
+// ===== relógio: no online, o do servidor manda =====
+let clockOffset = 0;
+const now = () => nowSec() + clockOffset;
+
+// ===== combo: cliques nos últimos 2 s =====
+const clickTimes: number[] = [];
+function combo() {
+  const t = performance.now();
+  while (clickTimes.length && t - clickTimes[0] > 2000) clickTimes.shift();
+  return comboFor(clickTimes.length / 2);
 }
 
 // ===== online: o servidor é a fonte da verdade =====
+let lastRank: number | null = null;
+let lastAhead: ServerState["ahead"] = null;
+let myName: string | null = null;
+
 const sync = onlineEnabled ? createSync(player(), onServer, ok => {
   $("net").textContent = ok ? "Conectado: sua aura conta no ranking." : "Sem conexão. Seu progresso é enviado quando a conexão voltar.";
 }) : null;
 let firstSync = true;
 
 function onServer(r: ServerState, pending: string) {
+  clockOffset = r.now - nowSec();
   state = toState(r);
-  for (const c of pending) applyEvent(state, c);
+  for (const [c, a] of parseEvents(pending)) applyEvent(state, c, a, combo(), now());
   if (firstSync && r.offline >= 60) welcomeBack(r.offline, r.offline_gain);
+  if (r.daily > 0) dailyReward(r.daily, state.streak);
+  for (const id of r.new_achievements ?? []) achievementUnlocked(id);
   firstSync = false;
+
+  myName = r.name;
+  if (r.name && lastRank && r.rank && r.rank < lastRank && lastAhead) {
+    toast(`🚀 Você passou ${lastAhead.name}! Agora é #${r.rank} no ranking.`);
+    sfx.overtake();
+  }
+  lastRank = r.rank;
+  lastAhead = r.ahead;
   $("my-rank").textContent = r.name
-    ? `Você é ${r.name}, em #${r.rank} com recorde de ${fmtShort(r.best)}.`
+    ? `Você é ${r.name}, em #${r.rank} com ${fmtShort(state.lifetime)} de aura vitalícia.`
     : "Escolha um apelido para aparecer no ranking.";
   if (r.name && !$<HTMLInputElement>("name").value) $<HTMLInputElement>("name").value = r.name;
   render();
@@ -61,15 +99,28 @@ function welcomeBack(seconds: number, gained: number) {
   sfx.welcome();
 }
 
+function dailyReward(tokens: number, streak: number) {
+  toast(`🔥 Sequência de ${streak} ${streak === 1 ? "dia" : "dias"}! +${tokens} Fichas 67 pelo login de hoje.`);
+  sfx.daily();
+}
+
+function achievementUnlocked(id: string) {
+  const a = ACHIEVEMENTS.find(x => x.id === id);
+  if (!a) return;
+  toast(`🎖 Conquista: ${a.name} (+${a.reward} fichas)`);
+  sfx.achievement();
+}
+
 /** Aplica um evento local e, no modo online, manda para o servidor. */
-function act(code: string) {
-  const r = applyEvent(state, code);
-  sync?.push(code);
+function act(code: string, arg = "") {
+  const r = applyEvent(state, code, arg, combo(), now());
+  sync?.push(code + arg);
   return r;
 }
 
 // ===== montagem da tela =====
 for (let i = 0; i < 3; i++) $("clones").appendChild($("clawd").cloneNode(true) as Element).removeAttribute("id");
+for (const g of $("clones").querySelectorAll("[id]")) g.removeAttribute("id");
 
 $("ladder").innerHTML = RANKS.map(([, n]) => `<span>${n}</span>`).join("");
 const ladderEls = [...$("ladder").children] as HTMLElement[];
@@ -97,11 +148,84 @@ function levelUp(l: number) {
   b.innerHTML = `<small>SUBIU DE NÍVEL</small>${RANKS[l][1]}`;
   replay(b, "show");
   fx.flash();
-  sfx.levelUp();
+  if (l === LV.megaBrain) { sfx.megaBrain(); replay(stage, "jarvis-flash"); }
+  else if (l === LV.coopThief) { sfx.levelUp(l); sfx.thiefSpawn(); }
+  else sfx.levelUp(l);
   const r = mascot.getBoundingClientRect();
-  fx.burst(r.left + r.width / 2, r.top + r.height / 2, null, 40);
+  fx.burst(r.left + r.width / 2, r.top + r.height / 2, null, 20 + l * 3);
   replay($("star"), "nudge");
 }
+
+// ===== enfeites no Clawd =====
+let appliedLook = "";
+function applyCosmetics() {
+  const look = JSON.stringify(state.equipped);
+  if (look === appliedLook) return;
+  appliedLook = look;
+  const get = (slot: Slot) => (state.equipped[slot] ? cosmeticById(state.equipped[slot]!) : undefined);
+  for (const c of COSMETICS) if (c.bgClass) stage.classList.remove(c.bgClass);
+  const bg = get("bg");
+  if (bg?.bgClass) stage.classList.add(bg.bgClass);
+  const color = get("color");
+  stage.classList.toggle("has-color", Boolean(color));
+  if (color?.fill) stage.style.setProperty("--body", color.fill);
+  for (const slot of ["hat", "face", "outfit"] as const) {
+    $(`cos-${slot}`).innerHTML = get(slot)?.svg ?? ""; // desenho do catálogo, nunca texto do servidor
+    stage.classList.toggle(`has-${slot}`, Boolean(get(slot)));
+  }
+  $("cos-preview").innerHTML = clawdSvg(state.equipped);
+}
+
+// ===== eventos na tela: Cérebro Dourado e ladrão =====
+let goldenShown = false, thiefShown = false;
+function updateEvents() {
+  const t = now();
+  const g = goldenVisible(state, t);
+  if (g !== goldenShown) {
+    goldenShown = g;
+    const el = $("golden");
+    el.hidden = !g;
+    if (g) {
+      el.style.top = 15 + Math.random() * 45 + "%";
+      replay(el, "fly");
+      sfx.goldenSpawn();
+    }
+  }
+  const th = thiefVisible(state, t);
+  if (th !== thiefShown) {
+    thiefShown = th;
+    $("thief").hidden = !th;
+    if (th) { replay($("thief"), "run"); sfx.thiefSpawn(); }
+  }
+  const buffed = buffActive(state, t);
+  stage.classList.toggle("megabrain", buffed);
+  $("jarvis-time").textContent = buffed ? `×7 em toda a aura · ${Math.ceil(state.buffUntil - t)} s` : "";
+}
+
+$("golden").addEventListener("click", () => {
+  act(EV.golden);
+  $("golden").hidden = true;
+  if (buffActive(state, now())) {
+    sfx.megaBrain();
+    const b = $("banner");
+    b.innerHTML = `<small>JARVIS, ATIVAR</small>MEGA BRAIN`;
+    replay(b, "show");
+    fx.flash();
+    toast("🧠 Modo Mega Brain: ×7 em toda a aura por 67 segundos!");
+  }
+  render();
+});
+
+$("thief").addEventListener("click", () => {
+  const before = state.tokens;
+  act(EV.thief);
+  $("thief").hidden = true;
+  if (state.tokens > before) {
+    sfx.thiefCaught();
+    toast(`🦹 Pegou o ladrão! +${THIEF.tokens} Fichas 67.`);
+  }
+  render();
+});
 
 function render() {
   const l = levelOf(state.total);
@@ -111,15 +235,31 @@ function render() {
     for (let i = 1; i < RANKS.length; i++) stage.classList.toggle("l" + i, i <= l);
     ladderEls.forEach((el, i) => { el.classList.toggle("on", i <= l); el.classList.toggle("now", i === l); });
     $("rank").textContent = RANKS[l][1];
-    $("mult").textContent = `×${(LEVEL_BONUS ** l).toLocaleString("pt-BR", { maximumFractionDigits: 2 })} de nível`;
     if (up) levelUp(l);
   }
+  const bonus = LEVEL_BONUS ** l * (1 + PRESTIGE_BONUS * state.prestige);
+  $("mult").textContent = `×${bonus.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} de bônus` + (state.prestige ? ` · ⭐×${state.prestige}` : "");
   $("count").textContent = fmt(state.aura);
   $("gain").textContent = "+" + fmtShort(clickGain(state));
-  $("rate").textContent = `+${fmtShort(passivePerSecond(state))}/s no automático`;
+  $("rate").textContent = `+${fmtShort(passivePerSecond(state) * (buffActive(state, now()) ? 7 : 1))}/s no automático`;
   const cur = RANKS[level][0], nxt = RANKS[level + 1];
   $("bar").style.width = nxt ? Math.min(100, (state.total - cur) / (nxt[0] - cur) * 100) + "%" : "100%";
-  $("next").textContent = nxt ? `Próximo nível: ${fmtShort(nxt[0])} de aura total` : "Nível máximo!";
+  $("next").textContent = nxt ? `Próximo nível: ${fmtShort(nxt[0])} de aura total` : "Nível máximo! Renasça para ganhar +25% para sempre.";
+  $("tokens").textContent = `🎟 ${state.tokens} ${state.tokens === 1 ? "ficha" : "fichas"}`;
+  $("prestige").hidden = !canPrestige(state);
+
+  const ahead = $("ahead");
+  ahead.hidden = !sync || !myName;
+  if (!ahead.hidden) {
+    ahead.textContent = lastAhead
+      ? `Faltam ${fmtShort(Math.max(0, lastAhead.lifetime - state.lifetime))} para passar ${lastAhead.name} (#${lastAhead.rank})`
+      : "👑 Você é o #1 do ranking!";
+  }
+
+  const c = combo();
+  $("combo-bar").style.width = ((c - 1) / 2) * 100 + "%";
+  $("combo-text").textContent = `COMBO ×${c.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}`;
+  $("combo").classList.toggle("hot", c >= 2);
 
   for (const it of shopItems) {
     const n = state.upgrades[it.u.id];
@@ -128,26 +268,39 @@ function render() {
     it.btn.classList.toggle("maxed", isMaxed(state, it.u.id));
     it.btn.setAttribute("aria-disabled", String(!canBuy(state, it.u.id)));
   }
+  applyCosmetics();
+  updateEvents();
+  if (menu.open) renderMenu();
   if (!sync) save(state);
 }
 
 function farm(ev?: MouseEvent) {
-  const r = act(CLICK_CODE)!;
+  clickTimes.push(performance.now());
+  const r = act(EV.click)!;
   const rect = mascot.getBoundingClientRect();
   const x = ev?.clientX || rect.left + rect.width / 2;
   const y = ev?.clientY || rect.top + rect.height / 3;
   fx.burst(x, y, "+" + fmtShort(r.gain) + (r.crit ? " CRÍTICO" : ""), level >= LV.auraInfinita ? 24 : 14);
-  if (r.crit) sfx.crit(); else sfx.click();
+  if (r.crit) sfx.crit(); else sfx.click(combo());
   if (level >= LV.deus && !reduceMotion) replay(stage, "shake");
   render();
+}
+
+// ===== modo local: o navegador faz o papel do servidor =====
+function localTick() {
+  schedule(state, now());
+  const reward = daily(state, todayBR());
+  if (reward) dailyReward(reward, state.streak);
+  for (const a of checkAchievements(state, levelOf(state.total), allMaxed(state))) achievementUnlocked(a.id);
 }
 
 // aura passiva local, para o contador andar suave; no online o servidor corrige a cada sincronização
 let lastTick = performance.now();
 setInterval(() => {
-  const now = performance.now();
-  passive(state, (now - lastTick) / 1000);
-  lastTick = now;
+  const t = performance.now();
+  passive(state, (t - lastTick) / 1000, now());
+  lastTick = t;
+  if (!sync) localTick();
   render();
 }, 250);
 
@@ -156,13 +309,21 @@ $("farm").addEventListener("click", farm);
 mascot.addEventListener("click", farm);
 mascot.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); farm(); } });
 
-$("reset").addEventListener("click", async () => {
-  const msg = sync ? "Zerar a aura e os upgrades? Seu recorde continua no ranking. Não dá para desfazer."
-    : "Zerar toda a aura e os upgrades? Não dá para desfazer.";
-  if (!confirm(msg)) return;
-  state = newState(state.rng);
+$("reset").addEventListener("click", () => {
+  if (!confirm("Zerar a aura e os upgrades desta vida? Fichas, enfeites, conquistas e o ranking continuam. Não dá para desfazer.")) return;
+  act(EV.reset);
   render();
-  try { await sync?.reset(); } catch { toast("Não deu para zerar no servidor. Tente de novo."); }
+});
+
+$("prestige").addEventListener("click", () => {
+  if (!confirm(`Renascer? Você volta para NPC sem upgrades, mas ganha +25% de aura para sempre (fica ⭐×${state.prestige + 1}). Fichas, enfeites e ranking continuam.`)) return;
+  act(EV.prestige);
+  sfx.prestige();
+  const b = $("banner");
+  b.innerHTML = `<small>RENASCEU</small>⭐ × ${state.prestige}`;
+  replay(b, "show");
+  fx.flash();
+  render();
 });
 
 function setShopOpen(open: boolean) {
@@ -182,30 +343,125 @@ function applyMute() {
 $("mute").addEventListener("click", () => { muted = !muted; saveMuted(muted); applyMute(); });
 applyMute();
 
-// ===== ranking =====
-const dialog = $<HTMLDialogElement>("ranking");
-async function showTop() {
-  const list = $("top");
-  list.replaceChildren(Object.assign(document.createElement("li"), { textContent: "Carregando…" }));
+// ===== menu: ranking, conquistas e enfeites =====
+const menu = $<HTMLDialogElement>("menu");
+let tab = "ach";
+let list: "around" | "top" = "around";
+
+function openMenu(t: string) {
+  tab = t;
+  renderedMenu = "";
+  if (!menu.open) menu.showModal();
+  renderMenu();
+  if (t === "ranking") void loadRanking();
+}
+for (const b of document.querySelectorAll<HTMLElement>(".menu-open, .tabs [data-tab]")) {
+  b.addEventListener("click", () => openMenu(b.dataset.tab!));
+}
+$("menu-close").addEventListener("click", () => menu.close());
+
+let renderedMenu = "";
+function renderMenu() {
+  for (const b of document.querySelectorAll<HTMLElement>(".tabs [data-tab]")) b.setAttribute("aria-selected", String(b.dataset.tab === tab));
+  for (const p of document.querySelectorAll<HTMLElement>("[data-panel]")) p.hidden = p.dataset.panel !== tab;
+  // só redesenha quando algo que aparece no menu mudou
+  const key = JSON.stringify([tab, state.tokens, state.achievements, state.owned, state.equipped]);
+  if (key === renderedMenu) return;
+  renderedMenu = key;
+  if (tab === "ach") renderAchievements();
+  if (tab === "cos") renderCosmetics();
+}
+
+function renderAchievements() {
+  $("ach-summary").textContent = `${state.achievements.length} de ${ACHIEVEMENTS.length} conquistas · cada uma dá Fichas 67.`;
+  $("ach-list").replaceChildren(...ACHIEVEMENTS.map(a => {
+    const done = state.achievements.includes(a.id);
+    const li = document.createElement("li");
+    li.className = done ? "done" : "";
+    li.innerHTML = `<span class="medal">${done ? "🎖" : "🔒"}</span><span><b></b><small></small></span><em></em>`;
+    li.querySelector("b")!.textContent = a.name;
+    li.querySelector("small")!.textContent = a.desc;
+    li.querySelector("em")!.textContent = `+${a.reward} 🎟`;
+    return li;
+  }));
+}
+
+function renderCosmetics() {
+  $("cos-tokens").textContent = String(state.tokens);
+  $("cos-preview").innerHTML = clawdSvg(state.equipped);
+  $("cos-list").replaceChildren(...SLOTS.map(slot => {
+    const group = document.createElement("div");
+    group.className = "cos-group";
+    const h = document.createElement("h3");
+    h.textContent = slot.name;
+    const row = document.createElement("div");
+    row.className = "cos-row";
+    for (const c of COSMETICS.filter(x => x.slot === slot.id)) {
+      const owned = state.owned.includes(c.id), on = state.equipped[c.slot] === c.id;
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "cos-item" + (on ? " on" : "") + (owned ? " owned" : "");
+      btn.innerHTML = `<span class="cos-thumb"></span><b></b><small></small>`;
+      btn.querySelector(".cos-thumb")!.innerHTML = c.bgClass ? `<span class="bg-swatch ${c.bgClass}"></span>` : clawdSvg({ [c.slot]: c.id });
+      btn.querySelector("b")!.textContent = c.name;
+      btn.querySelector("small")!.textContent = on ? "equipado ✓" : owned ? "equipar" : `${c.price} 🎟`;
+      btn.addEventListener("click", () => {
+        if (on) { act(EV.unequip, slot.code); sfx.equip(); }
+        else if (owned) { act(EV.equip, c.code); sfx.equip(); }
+        else if (state.tokens >= c.price) {
+          act(EV.buyCosmetic, c.code);
+          act(EV.equip, c.code);
+          sfx.cosmetic();
+          toast(`👕 ${c.name} comprado e equipado!`);
+        } else { sfx.denied(); toast(`Faltam ${c.price - state.tokens} Fichas 67 para ${c.name}.`); }
+        render();
+      });
+      row.append(btn);
+    }
+    group.append(h, row);
+    return group;
+  }));
+}
+
+function rankRow(e: RankRow) {
+  const li = document.createElement("li");
+  if (e.me) li.className = "me";
+  const pos = document.createElement("span"), pic = document.createElement("span"), name = document.createElement("span"), aura = document.createElement("b");
+  pos.className = "pos";
+  pos.textContent = `#${e.rank}`;
+  pic.className = "pic";
+  // enfeites de outro jogador: valida contra o catálogo antes de desenhar
+  pic.innerHTML = clawdSvg(sanitize({ owned: Object.values(e.equipped ?? {}), equipped: e.equipped }).equipped);
+  name.textContent = e.name + (e.prestige ? ` ⭐${e.prestige}` : ""); // textContent: apelidos nunca viram HTML
+  aura.textContent = fmtShort(e.lifetime);
+  li.append(pos, pic, name, aura);
+  return li;
+}
+
+async function loadRanking() {
+  const ol = $("top");
+  for (const b of document.querySelectorAll<HTMLElement>(".subtabs [data-list]")) b.classList.toggle("on", b.dataset.list === list);
+  ol.replaceChildren(Object.assign(document.createElement("li"), { textContent: "Carregando…" }));
   try {
-    const top = await sync!.top();
-    list.replaceChildren(...(top.length ? top : [{ name: "Ninguém ainda. Seja o primeiro!", best: 0 }]).map(e => {
-      const li = document.createElement("li");
-      const name = document.createElement("span"), best = document.createElement("b");
-      name.textContent = e.name; // textContent: apelidos nunca viram HTML
-      best.textContent = e.best ? fmtShort(e.best) : "";
-      li.append(name, best);
-      return li;
-    }));
+    const rows = list === "top" ? await sync!.top() : await sync!.around();
+    if (!rows.length) {
+      ol.replaceChildren(Object.assign(document.createElement("li"), {
+        textContent: list === "around" ? "Escolha um apelido para ver quem está perto de você." : "Ninguém ainda. Seja o primeiro!",
+      }));
+      return;
+    }
+    ol.replaceChildren(...rows.map(rankRow));
   } catch {
-    list.replaceChildren(Object.assign(document.createElement("li"), { textContent: "Não foi possível carregar o ranking." }));
+    ol.replaceChildren(Object.assign(document.createElement("li"), { textContent: "Não foi possível carregar o ranking." }));
   }
+}
+for (const b of document.querySelectorAll<HTMLElement>(".subtabs [data-list]")) {
+  b.addEventListener("click", () => { list = b.dataset.list as typeof list; void loadRanking(); });
 }
 
 if (sync) {
   $("ranking-open").hidden = false;
-  $("ranking-open").addEventListener("click", () => { dialog.showModal(); void showTop(); });
-  $("ranking-close").addEventListener("click", () => dialog.close());
+  $("tab-ranking").hidden = false;
   $<HTMLFormElement>("name-form").addEventListener("submit", async e => {
     e.preventDefault();
     const msg = $("name-msg");
@@ -214,17 +470,20 @@ if (sync) {
       await sync.setName($<HTMLInputElement>("name").value);
       msg.textContent = "Apelido salvo!";
       await sync.flush();
-      void showTop();
+      void loadRanking();
     } catch (err) {
       msg.textContent = (err as Error).message;
     }
   });
   void sync.flush();
-} else if (saved.away >= 60) {
+} else {
   // modo local: credita o tempo fora, com o mesmo teto do servidor
-  const before = state.total;
-  passive(state, saved.away);
-  welcomeBack(saved.away, state.total - before);
+  if (saved.away >= 60) {
+    const before = state.total;
+    passive(state, saved.away, now());
+    welcomeBack(saved.away, state.total - before);
+  }
+  localTick();
 }
 
 render();
@@ -234,6 +493,7 @@ if (import.meta.env.DEV) {
     state: () => state,
     render,
     toast,
+    now,
     pauseSync: sync ? () => sync.pause() : null,
   }));
 }
