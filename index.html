@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Clicker em que o Clawd faz o six seven enquanto você farma aura.">
 <title>Clawd Aura Farm</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<meta name="theme-color" content="#140f24">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;700&family=VT323&display=swap">
 </head>
@@ -15,12 +17,16 @@
   <canvas id="fx"></canvas>
   <div class="flash" id="flash"></div>
 
+  <button id="mute" class="mute" type="button">🔊</button>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
   <div class="hud">
     <div class="label">Aura</div>
     <div class="count" id="count">0</div>
     <div class="rank">Nível: <b id="rank">NPC</b></div>
     <div class="mult"><span id="mult">×1 de nível</span> · <span id="rate">+0/s no automático</span></div>
     <div class="next" title="Progresso até o próximo nível"><i id="bar"></i></div>
+    <div class="next-label" id="next"></div>
   </div>
 
   <div class="mascot-wrap" id="mascot" role="button" tabindex="0" aria-label="Clawd fazendo six seven. Clique para farmar aura.">
@@ -75,11 +81,28 @@
 
   <div class="controls">
     <button id="farm" type="button">FARMAR AURA <span id="gain">+67</span></button>
+    <button id="ranking-open" type="button" hidden>🏆 Ranking</button>
     <button id="shop-toggle" type="button" aria-controls="shop" aria-expanded="false">🛒 Loja</button>
     <a id="star" href="https://github.com/EuGabrielNolasco/clawd-aura-farm" target="_blank" rel="noopener">⭐ Dar estrela no GitHub</a>
     <button id="reset" type="button">zerar aura</button>
   </div>
   <div class="ladder" id="ladder"></div>
+
+  <dialog class="ranking" id="ranking" aria-labelledby="ranking-title">
+    <div class="shop-head"><h2 id="ranking-title">Ranking</h2><button id="ranking-close" type="button" aria-label="Fechar ranking">✕</button></div>
+    <p class="my-rank" id="my-rank">Conectando…</p>
+    <form id="name-form">
+      <label for="name">Seu apelido</label>
+      <div class="name-row">
+        <input id="name" name="name" required minlength="3" maxlength="20" autocomplete="nickname"
+               pattern="[A-Za-zÀ-ÖØ-öø-ÿ0-9 _.\-]{3,20}" title="De 3 a 20 letras, números, espaço, _ . ou -">
+        <button type="submit">Salvar</button>
+      </div>
+      <p class="name-msg" id="name-msg" role="status"></p>
+    </form>
+    <ol class="top" id="top"></ol>
+    <p class="net" id="net"></p>
+  </dialog>
 
   <aside class="shop" id="shop" aria-label="Loja de upgrades">
     <div class="shop-head"><h2>Loja</h2><button id="shop-close" type="button" aria-label="Fechar loja">✕</button></div>

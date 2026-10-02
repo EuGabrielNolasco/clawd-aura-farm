@@ -189,7 +189,9 @@ button:focus-visible { outline: 3px solid var(--ink); outline-offset: 4px; }
   border: 1px solid color-mix(in srgb, var(--violet) 50%, transparent);
 }
 .item:not(:disabled):hover { background: color-mix(in srgb, var(--violet) 40%, transparent); }
-.item:disabled { cursor: not-allowed; opacity: .5; }
+.item[aria-disabled="true"] { cursor: not-allowed; opacity: .5; }
+.item.maxed { opacity: .75; border-color: var(--aura); }
+.item.maxed .item-cost { color: var(--clawd); }
 .item-name { font-size: 1rem; }
 .item-name em { font-style: normal; font-family: var(--mono); color: var(--clawd); margin-left: .2rem; }
 .item-desc { font-family: var(--mono); font-size: 1rem; color: var(--muted); font-weight: 400; }
@@ -206,3 +208,46 @@ button:focus-visible { outline: 3px solid var(--ink); outline-offset: 4px; }
   .shop.open { translate: 0 0; }
   .shop-items { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
 }
+
+/* ===== Meta do próximo nível, som e avisos ===== */
+.next-label { font-family: var(--mono); font-size: 1rem; color: var(--muted); }
+.mute {
+  position: absolute; z-index: 6; top: 12px; right: 12px; font-size: 1.3rem; line-height: 1;
+  background: color-mix(in srgb, var(--night) 70%, transparent); color: var(--ink); padding: .4rem .5rem;
+  border: 1px solid color-mix(in srgb, var(--muted) 35%, transparent);
+}
+.toast {
+  position: absolute; z-index: 7; left: 50%; top: 12px; translate: -50% -150%; max-width: min(520px, calc(100vw - 96px));
+  padding: .7rem 1rem; font-size: .95rem; color: var(--night); background: var(--aura);
+  box-shadow: 0 5px 0 var(--clawd-dark); transition: translate .4s; pointer-events: none;
+}
+.toast.show { translate: -50% 0; }
+
+/* ===== Ranking ===== */
+#ranking-open { font-size: 1rem; color: var(--night); background: var(--clawd); padding: .65rem 1rem; box-shadow: 0 5px 0 var(--clawd-dark); }
+.ranking {
+  width: min(420px, calc(100vw - 32px)); padding: 1.1rem; color: var(--ink); background: var(--night); text-align: left;
+  border: 2px solid var(--violet); font-family: var(--display);
+}
+.ranking::backdrop { background: #0009; }
+.ranking h2 { color: var(--aura); }
+#ranking-close { font-size: 1.1rem; color: var(--muted); background: transparent; padding: 0 .3rem; }
+.my-rank, .net, .name-msg { font-family: var(--mono); font-size: 1.05rem; color: var(--muted); margin: .4rem 0; }
+.name-msg:empty { display: none; }
+#name-form label { display: block; font-size: .85rem; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-top: .8rem; }
+.name-row { display: flex; gap: .5rem; margin-top: .3rem; }
+.name-row input {
+  flex: 1; min-width: 0; font: 1.2rem var(--mono); color: var(--ink); background: var(--dusk);
+  border: 1px solid var(--violet); padding: .4rem .6rem;
+}
+.name-row input:focus-visible { outline: 2px solid var(--aura); }
+.name-row button { color: var(--night); background: var(--aura); padding: .4rem .9rem; }
+.top { list-style: none; counter-reset: pos; padding: 0; margin: 1rem 0 0; display: grid; gap: .3rem; }
+.top li {
+  counter-increment: pos; display: flex; gap: .6rem; align-items: baseline; padding: .35rem .6rem;
+  font-family: var(--mono); font-size: 1.2rem; background: color-mix(in srgb, var(--violet) 18%, transparent);
+}
+.top li::before { content: "#" counter(pos); color: var(--clawd); min-width: 2.2ch; }
+.top li:first-child { background: color-mix(in srgb, var(--aura) 25%, transparent); }
+.top li span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.top li b { color: var(--aura); font-weight: 400; }
