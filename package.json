@@ -1,0 +1,24 @@
+{
+  "name": "clawd-aura-farm",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Clicker em que o Clawd faz o six seven enquanto você farma aura",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/EuGabrielNolasco/clawd-aura-farm.git"
+  },
+  "homepage": "https://eugabrielnolasco.github.io/clawd-aura-farm/",
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "vite": "^8.3.2",
+    "vitest": "^5.0.3"
+  }
+}
