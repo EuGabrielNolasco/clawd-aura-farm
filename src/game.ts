@@ -1,19 +1,26 @@
 // Regras do jogo, sem DOM. As mesmas regras rodam no servidor (supabase/schema.sql):
 // qualquer mudança aqui precisa ser espelhada lá, senão o ranking diverge do que o jogador vê.
 //
-// Economia calibrada por simulação (3 sessões de 40 min por dia, 4 cliques/s):
-// nível máximo em ~3 dias e loja completa em ~1 semana.
+// Economia calibrada por simulação (3 sessões de 40 min por dia, 4 cliques/s, pegando os
+// Cérebros Dourados): primeiros níveis em segundos, nível máximo em ~3 dias e loja em ~1 semana.
 
 /** [aura total mínima, nome]. */
 export const RANKS: readonly (readonly [number, string])[] = [
-  [0, "NPC"], [2.7e5, "Figurante"], [3.6e6, "Main character"], [2.6e7, "Sigma"],
-  [6.7e7, "Aura infinita"], [9.1e7, "Lenda do 6-7"], [1.3e8, "Ascendido"],
-  [1.2e9, "Deus do 6-7"], [7.5e9, "Multiverso"], [4.4e10, "Clawd Supremo"], [1.5e11, "O Próprio 67"],
+  [0, "NPC"], [6.6e4, "Figurante"], [4e5, "Cria"], [1.8e6, "Brabo"], [1.7e7, "O Pai Tá On"],
+  [2.8e7, "Main character"], [9e7, "Sigma"], [2.7e8, "Mega Brain"], [3.9e8, "Coop Thief"],
+  [6.5e8, "Aura infinita"], [1.2e9, "Lenda do 6-7"], [4.6e9, "Ascendido"], [1.5e10, "Deus do 6-7"],
+  [4.5e10, "Multiverso"], [9.8e10, "Clawd Supremo"], [2.7e11, "O Próprio 67"],
 ];
+
+/** Índices dos níveis que ligam efeitos especiais, para não espalhar números mágicos. */
+export const LV = {
+  figurante: 1, cria: 2, brabo: 3, paiTaOn: 4, mainCharacter: 5, sigma: 6, megaBrain: 7, coopThief: 8,
+  auraInfinita: 9, lenda: 10, ascendido: 11, deus: 12, multiverso: 13, supremo: 14, max: 15,
+} as const;
 
 export const BASE_CLICK = 67;
 export const BASE_PASSIVE = 2;
-export const LEVEL_BONUS = 1.15;
+export const LEVEL_BONUS = 1.1;
 export const CRIT_MULT = 10;
 export const BASE_CRIT = 0.1;
 /** Máximo de aura passiva creditada enquanto o jogador está fora. */
@@ -39,7 +46,7 @@ export const UPGRADES: readonly Upgrade[] = [
   { id: "crit", code: "s", name: "Olhar sigma", desc: "+3% de chance de crítico", baseCost: 5000, growth: 2.2, max: 10 },
   { id: "fab", code: "f", name: "Fábrica de 67", desc: "+60 de aura por segundo", baseCost: 2e4, growth: 1.22, max: 30 },
   { id: "dc", code: "d", name: "Datacenter do Clawd", desc: "+4.000 de aura por segundo", baseCost: 2e7, growth: 1.25, max: 30 },
-  { id: "cosmic", code: "x", name: "Aura cósmica", desc: "Dobra toda a aura", baseCost: 2.7e9, growth: 5, max: 5 },
+  { id: "cosmic", code: "x", name: "Aura cósmica", desc: "Dobra toda a aura", baseCost: 3.2e9, growth: 5, max: 5 },
 ];
 
 export const CLICK_CODE = "c";

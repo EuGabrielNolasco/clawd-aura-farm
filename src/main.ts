@@ -1,7 +1,7 @@
 import "./style.css";
 import {
   allMaxed, applyEvent, canBuy, CLICK_CODE, clickGain, costOf, isMaxed, LEVEL_BONUS, levelOf,
-  newState, passive, passivePerSecond, RANKS, UPGRADES, type State,
+  LV, newState, passive, passivePerSecond, RANKS, UPGRADES, type State,
 } from "./game";
 import { createFx, reduceMotion } from "./fx";
 import { createSync, onlineEnabled, toState, type ServerState } from "./online";
@@ -136,9 +136,9 @@ function farm(ev?: MouseEvent) {
   const rect = mascot.getBoundingClientRect();
   const x = ev?.clientX || rect.left + rect.width / 2;
   const y = ev?.clientY || rect.top + rect.height / 3;
-  fx.burst(x, y, "+" + fmtShort(r.gain) + (r.crit ? " CRÍTICO" : ""), level >= 4 ? 24 : 14);
+  fx.burst(x, y, "+" + fmtShort(r.gain) + (r.crit ? " CRÍTICO" : ""), level >= LV.auraInfinita ? 24 : 14);
   if (r.crit) sfx.crit(); else sfx.click();
-  if (level >= 7 && !reduceMotion) replay(stage, "shake");
+  if (level >= LV.deus && !reduceMotion) replay(stage, "shake");
   render();
 }
 

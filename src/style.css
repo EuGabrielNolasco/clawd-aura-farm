@@ -82,7 +82,9 @@ canvas#fx { position: absolute; inset: 0; width: 100%; height: 100%; pointer-eve
 .arm-r { animation: seven .6s steps(2, jump-none) infinite; transform-box: fill-box; }
 .eye { animation: blink 3.4s infinite; transform-box: fill-box; transform-origin: center; }
 .body-fill { fill: var(--clawd); transition: fill .6s; }
-.shades, .crown, .wings { opacity: 0; transition: opacity .4s; }
+.shades, .crown, .wings, .brows, .chain, .brain, .sack { opacity: 0; transition: opacity .4s; }
+.synapse { animation: synapse .9s steps(2, jump-none) infinite; }
+.synapse:nth-child(odd) { animation-delay: .45s; }
 .wings { animation: flap .3s steps(2, jump-none) infinite; transform-box: fill-box; transform-origin: center; }
 
 .sixseven {
@@ -132,23 +134,30 @@ button:focus-visible { outline: 3px solid var(--ink); outline-offset: 4px; }
 .flash.go { animation: flash .35s ease-out; }
 .stage.shake { animation: shake .25s; }
 
-/* ===== Efeitos por nível (acumulam) ===== */
+/* ===== Efeitos por nível (acumulam). Índices em LV, src/game.ts ===== */
 .l1 .halo { opacity: .45; }                                   /* Figurante: brilho fraco */
-.l2 .spot { opacity: 1; } .l2 .halo { opacity: .8; }          /* Main character: holofote */
-.l3 .shades { opacity: 1; } .l3 .eye { opacity: 0; }          /* Sigma: óculos + vinheta roxa */
-.l3 { background: radial-gradient(ellipse at 50% 60%, #2e1f55, var(--night) 70%); }
-.l4 .ring { opacity: 1; }                                     /* Aura infinita: anel arco-íris */
-.l5 .crown { opacity: 1; }                                    /* Lenda: coroa + fogo (canvas) */
-.l6 .wings { opacity: 1; } .l6 .mascot-wrap { animation: ascend 2.4s ease-in-out infinite; }  /* Ascendido: asas + estrelas */
-.l7 .body-fill { fill: var(--aura); }                         /* Deus do 6-7: Clawd dourado + raios */
-.l7 { background: radial-gradient(ellipse at 50% 60%, #3d2a10, var(--night) 70%); }
-.l8 .clones svg { opacity: .5; }                              /* Multiverso: clones */
-.l8 .bg67 { opacity: .06; animation: pulse 1.2s ease-in-out infinite; }
-.l9 { animation: hue 6s linear infinite; }                    /* Clawd Supremo: realidade derretendo */
-.l9 .mascot { filter: drop-shadow(0 0 12px var(--aura)); }
-.l10 .bg67 { opacity: .14; color: var(--clawd); }             /* O Próprio 67: tudo no máximo */
-.l10 .mascot-wrap { animation: ascend 1.2s ease-in-out infinite, wobble .6s steps(2, jump-none) infinite; }
+.l2 .halo { opacity: .65; }                                   /* Cria: brilho mais forte */
+.l3 .brows { opacity: 1; }                                    /* Brabo: sobrancelhas bravas */
+.l4 .chain { opacity: 1; }                                    /* O Pai Tá On: corrente de ouro */
+.l5 .spot { opacity: 1; } .l5 .halo { opacity: .8; }          /* Main character: holofote */
+.l6 .shades { opacity: 1; } .l6 .eye { opacity: 0; }          /* Sigma: óculos + vinheta roxa */
+.l6 { background: radial-gradient(ellipse at 50% 60%, #2e1f55, var(--night) 70%); }
+.l7 .brain { opacity: 1; }                                    /* Mega Brain: cérebro gigante */
+.l7 { background: radial-gradient(ellipse at 50% 60%, #12324a, var(--night) 70%); }
+.l8 .sack { opacity: 1; }                                     /* Coop Thief: saco de aura roubada */
+.l9 .ring { opacity: 1; }                                     /* Aura infinita: anel arco-íris */
+.l10 .crown { opacity: 1; } .l10 .brain { opacity: 0; }       /* Lenda: coroa (no lugar do cérebro) + fogo */
+.l11 .wings { opacity: 1; } .l11 .mascot-wrap { animation: ascend 2.4s ease-in-out infinite; }  /* Ascendido: asas + estrelas */
+.l12 .body-fill { fill: var(--aura); }                        /* Deus do 6-7: Clawd dourado + raios */
+.l12 { background: radial-gradient(ellipse at 50% 60%, #3d2a10, var(--night) 70%); }
+.l13 .clones svg { opacity: .5; }                             /* Multiverso: clones */
+.l13 .bg67 { opacity: .06; animation: pulse 1.2s ease-in-out infinite; }
+.l14 { animation: hue 6s linear infinite; }                   /* Clawd Supremo: realidade derretendo */
+.l14 .mascot { filter: drop-shadow(0 0 12px var(--aura)); }
+.l15 .bg67 { opacity: .14; color: var(--clawd); }             /* O Próprio 67: tudo no máximo */
+.l15 .mascot-wrap { animation: ascend 1.2s ease-in-out infinite, wobble .6s steps(2, jump-none) infinite; }
 
+@keyframes synapse { 0% { opacity: 1; } 100% { opacity: .2; } }
 @keyframes bob { 50% { transform: translateY(-3%); } }
 @keyframes six { 0% { transform: translateY(-18%); } 100% { transform: translateY(18%); } }
 @keyframes seven { 0% { transform: translateY(18%); } 100% { transform: translateY(-18%); } }
@@ -165,7 +174,7 @@ button:focus-visible { outline: 3px solid var(--ink); outline-offset: 4px; }
 @keyframes flash { 0% { opacity: .7; } 100% { opacity: 0; } }
 @keyframes shake { 25% { transform: translate(-6px, 3px); } 50% { transform: translate(5px, -4px); } 75% { transform: translate(-3px, 5px); } }
 @media (prefers-reduced-motion: reduce) {
-  *, .l9, .l10 .mascot-wrap { animation: none !important; }
+  *, .l14, .l15 .mascot-wrap { animation: none !important; }
 }
 
 /* ===== Loja: coluna fixa à direita no desktop, gaveta inferior no celular ===== */

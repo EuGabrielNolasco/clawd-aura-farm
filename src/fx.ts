@@ -1,5 +1,7 @@
 // Efeitos em Canvas: números 6/7 voando, fogo, estrelas, raios e chuva de 67.
 
+import { LV } from "./game";
+
 interface Particle {
   x: number; y: number; vx: number; vy: number; life: number;
   kind: "big" | "num" | "fire" | "rain";
@@ -50,7 +52,7 @@ export function createFx(canvas: HTMLCanvasElement, mascot: HTMLElement, flashEl
 
     if (!reduceMotion) {
       // Ascendido+: estrelas piscando
-      if (level >= 6) {
+      if (level >= LV.ascendido) {
         ctx.fillStyle = "#f3ecff";
         for (const s of stars) {
           ctx.globalAlpha = .3 + .7 * Math.abs(Math.sin(t / 40 + s.p));
@@ -58,12 +60,12 @@ export function createFx(canvas: HTMLCanvasElement, mascot: HTMLElement, flashEl
         }
       }
       // Lenda+: fogo subindo do Clawd
-      if (level >= 5 && t % 2 === 0) {
+      if (level >= LV.lenda && t % 2 === 0) {
         particles.push({ x: cx + (Math.random() - .5) * r.width * .7, y: r.bottom - r.height * .2,
           vx: (Math.random() - .5) * .5, vy: -1.5 - Math.random() * 1.5, life: 40, kind: "fire" });
       }
       // Deus do 6-7+: raios de vez em quando
-      if (level >= 7 && !bolt && Math.random() < .008) {
+      if (level >= LV.deus && !bolt && Math.random() < .008) {
         const pts: [number, number][] = [[Math.random() * W, 0]];
         while (pts[pts.length - 1][1] < H * .7) {
           const [px, py] = pts[pts.length - 1];
@@ -80,7 +82,7 @@ export function createFx(canvas: HTMLCanvasElement, mascot: HTMLElement, flashEl
         if (--bolt.life <= 0) bolt = null;
       }
       // O Próprio 67: chuva de 67
-      if (level >= 10 && t % 4 === 0) {
+      if (level >= LV.max && t % 4 === 0) {
         particles.push({ x: Math.random() * W, y: -20, vx: 0, vy: 2 + Math.random() * 3, life: H / 2, text: "67", kind: "rain" });
       }
     }

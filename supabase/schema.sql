@@ -37,18 +37,18 @@ revoke all on public.aura_players from public, anon, authenticated;
 create or replace function public.aura_level(p_total double precision) returns int
 language sql immutable set search_path = '' as $$
   select coalesce(max(i) - 1, 0)::int from unnest(array[
-    0, 2.7e5, 3.6e6, 2.6e7, 6.7e7, 9.1e7, 1.3e8, 1.2e9, 7.5e9, 4.4e10, 1.5e11
+    0, 6.6e4, 4e5, 1.8e6, 1.7e7, 2.8e7, 9e7, 2.7e8, 3.9e8, 6.5e8, 1.2e9, 4.6e9, 1.5e10, 4.5e10, 9.8e10, 2.7e11
   ]::float8[]) with ordinality as t(min, i) where p_total >= min
 $$;
 
 create or replace function public.aura_threshold(p_level int) returns double precision
 language sql immutable set search_path = '' as $$
-  select (array[0, 2.7e5, 3.6e6, 2.6e7, 6.7e7, 9.1e7, 1.3e8, 1.2e9, 7.5e9, 4.4e10, 1.5e11]::float8[])[p_level + 1]
+  select (array[0, 6.6e4, 4e5, 1.8e6, 1.7e7, 2.8e7, 9e7, 2.7e8, 3.9e8, 6.5e8, 1.2e9, 4.6e9, 1.5e10, 4.5e10, 9.8e10, 2.7e11]::float8[])[p_level + 1]
 $$;
 
 create or replace function public.aura_mult(p_total double precision, p_ups int[]) returns double precision
 language sql immutable set search_path = '' as $$
-  select power(1.15::float8, public.aura_level(p_total)) * power(2::float8, p_ups[6])
+  select power(1.1::float8, public.aura_level(p_total)) * power(2::float8, p_ups[6])
 $$;
 
 -- ===== API pública =====
@@ -73,7 +73,7 @@ declare
   v_cost float8;
   v_gain float8;
   v_rank bigint;
-  v_base float8[] := array[50, 200, 5000, 2e4, 2e7, 2.7e9]::float8[];
+  v_base float8[] := array[50, 200, 5000, 2e4, 2e7, 3.2e9]::float8[];
   v_growth float8[] := array[1.18, 1.3, 2.2, 1.22, 1.25, 5]::float8[];
   v_max int[] := array[40, 30, 10, 30, 30, 5];
 begin
@@ -119,7 +119,7 @@ begin
     exit when v_left <= 0;
     v_lvl := public.aura_level(p.total);
     v_rate := (2 + 2 * p.ups[1] + 60 * p.ups[4] + 4000 * p.ups[5]) * public.aura_mult(p.total, p.ups);
-    if v_lvl < 10 then
+    if v_lvl < 15 then
       v_dt := least(v_left, greatest((public.aura_threshold(v_lvl + 1) - p.total) / v_rate, 0.001));
     else
       v_dt := v_left;

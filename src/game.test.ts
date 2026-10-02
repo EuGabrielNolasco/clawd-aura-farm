@@ -7,9 +7,10 @@ import {
 describe("níveis", () => {
   it("usa o mínimo de cada nível", () => {
     expect(levelOf(0)).toBe(0);
-    expect(levelOf(2.7e5 - 1)).toBe(0);
-    expect(levelOf(2.7e5)).toBe(1);
-    expect(levelOf(1.5e11)).toBe(RANKS.length - 1);
+    expect(levelOf(6.6e4 - 1)).toBe(0);
+    expect(levelOf(6.6e4)).toBe(1);
+    expect(levelOf(2.7e11)).toBe(RANKS.length - 1);
+    expect(RANKS).toHaveLength(16);
   });
 
   it("não cai de nível ao gastar aura", () => {
@@ -19,11 +20,11 @@ describe("níveis", () => {
     expect(levelOf(s.total)).toBe(1);
   });
 
-  it("cada nível dá +15% de aura", () => {
+  it("cada nível dá +10% de aura", () => {
     const s = newState();
     expect(clickGain(s)).toBe(67);
-    earn(s, 2.7e5);
-    expect(clickGain(s)).toBeCloseTo(67 * 1.15);
+    earn(s, 6.6e4);
+    expect(clickGain(s)).toBeCloseTo(67 * 1.1);
   });
 });
 
