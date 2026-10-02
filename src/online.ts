@@ -47,9 +47,10 @@ const MAX_QUEUE = 1000;
 export function createSync(p: Player, onSync: (r: ServerState, pending: string) => void, onStatus: (ok: boolean) => void) {
   let queue = "";
   let inflight = false;
+  let paused = false;
 
   async function flush() {
-    if (inflight) return;
+    if (inflight || paused) return;
     inflight = true;
     const sent = queue.slice(0, MAX_QUEUE);
     queue = queue.slice(sent.length);
@@ -72,11 +73,13 @@ export function createSync(p: Player, onSync: (r: ServerState, pending: string) 
   setInterval(flush, 2000);
   // ao sair da página, manda o que sobrou
   addEventListener("pagehide", () => {
-    if (queue) rpc("aura_sync", { p_id: p.id, p_secret: p.secret, p_events: queue.slice(0, MAX_QUEUE) }, true).catch(() => {});
+    if (queue && !paused) rpc("aura_sync", { p_id: p.id, p_secret: p.secret, p_events: queue.slice(0, MAX_QUEUE) }, true).catch(() => {});
   });
 
   return {
-    push(code: string) { if (queue.length < MAX_QUEUE) queue += code; },
+    push(code: string) { if (!paused && queue.length < MAX_QUEUE) queue += code; },
+    /** Para de sincronizar até recarregar a página (usado pelo painel dev). */
+    pause() { paused = true; queue = ""; },
     flush,
     setName: (name: string) => rpc<void>("aura_set_name", { p_id: p.id, p_secret: p.secret, p_name: name }),
     reset: async () => { queue = ""; await rpc<void>("aura_reset", { p_id: p.id, p_secret: p.secret }); await flush(); },

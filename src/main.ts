@@ -228,3 +228,12 @@ if (sync) {
 }
 
 render();
+
+if (import.meta.env.DEV) {
+  void import("./dev").then(m => m.mountDev({
+    state: () => state,
+    render,
+    toast,
+    pauseSync: sync ? () => sync.pause() : null,
+  }));
+}
