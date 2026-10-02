@@ -19,10 +19,15 @@ body {
   color: var(--ink);
   font-family: var(--display);
   margin: 0;
-  overflow: hidden;
+  /* rola na vertical só quando a tela é baixa demais para caber tudo */
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 .stage {
-  height: 100%;
+  min-height: 100dvh;
+  box-sizing: border-box;
+  padding-block: 12px;
+  overflow-x: clip;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: 1rem;
   padding-inline: 16px;
@@ -31,9 +36,9 @@ body {
   background: radial-gradient(ellipse at 50% 60%, var(--dusk), var(--night) 70%);
   transition: background .8s;
 }
-canvas#fx { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; }
+canvas#fx { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; }
 .bg67 {
-  position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none;
+  position: fixed; inset: 0; display: grid; place-items: center; pointer-events: none;
   font-family: var(--display); font-weight: 700; font-size: 60vmin; line-height: 1;
   color: var(--aura); opacity: 0; z-index: 0;
 }
@@ -130,7 +135,7 @@ button:focus-visible { outline: 3px solid var(--ink); outline-offset: 4px; }
 }
 .banner small { display: block; font-size: .45em; color: var(--ink); text-shadow: none; letter-spacing: .2em; }
 .banner.show { animation: banner 2.2s ease-out; }
-.flash { position: absolute; inset: 0; background: var(--ink); opacity: 0; pointer-events: none; z-index: 4; }
+.flash { position: fixed; inset: 0; background: var(--ink); opacity: 0; pointer-events: none; z-index: 4; }
 .flash.go { animation: flash .35s ease-out; }
 .stage.shake { animation: shake .25s; }
 
@@ -221,16 +226,17 @@ button:focus-visible { outline: 3px solid var(--ink); outline-offset: 4px; }
 /* ===== Meta do próximo nível, som e avisos ===== */
 .next-label { font-family: var(--mono); font-size: 1rem; color: var(--muted); }
 .mute {
-  position: absolute; z-index: 6; top: 12px; right: 12px; font-size: 1.3rem; line-height: 1;
+  position: fixed; z-index: 6; top: 12px; right: 12px; font-size: 1.3rem; line-height: 1;
   background: color-mix(in srgb, var(--night) 70%, transparent); color: var(--ink); padding: .4rem .5rem;
   border: 1px solid color-mix(in srgb, var(--muted) 35%, transparent);
 }
 .toast {
-  position: absolute; z-index: 7; left: 50%; top: 12px; translate: -50% -150%; max-width: min(520px, calc(100vw - 96px));
+  position: fixed; z-index: 7; left: 50%; top: 12px; translate: -50% -150%; max-width: min(520px, calc(100vw - 96px));
   padding: .7rem 1rem; font-size: .95rem; color: var(--night); background: var(--aura);
-  box-shadow: 0 5px 0 var(--clawd-dark); transition: translate .4s; pointer-events: none;
+  box-shadow: 0 5px 0 var(--clawd-dark); transition: translate .4s, opacity .4s; pointer-events: none;
+  opacity: 0; /* escondido, nem a sombra aparece no topo */
 }
-.toast.show { translate: -50% 0; }
+.toast.show { translate: -50% 0; opacity: 1; }
 
 /* ===== Ranking ===== */
 #ranking-open { font-size: 1rem; color: var(--night); background: var(--clawd); padding: .65rem 1rem; box-shadow: 0 5px 0 var(--clawd-dark); }
@@ -277,7 +283,7 @@ button:focus-visible { outline: 3px solid var(--ink); outline-offset: 4px; }
 #ranking-open.menu-open { color: var(--night); background: var(--clawd); box-shadow: 0 5px 0 var(--clawd-dark); }
 
 /* ===== Cérebro Dourado e ladrão ===== */
-.golden, .thief { position: absolute; z-index: 6; padding: 0; background: transparent; cursor: pointer; }
+.golden, .thief { position: fixed; z-index: 6; padding: 0; background: transparent; cursor: pointer; }
 .golden { width: 64px; height: 48px; left: -80px; filter: drop-shadow(0 0 12px #ffd166); }
 .golden.fly { animation: fly 13s linear forwards, bob .5s ease-in-out infinite; }
 .thief { width: 56px; height: 56px; bottom: 14%; left: -70px; }
@@ -288,7 +294,7 @@ button:focus-visible { outline: 3px solid var(--ink); outline-offset: 4px; }
 @keyframes run { from { left: -70px; } to { left: calc(100% + 70px); } }
 
 /* ===== Modo Mega Brain: HUD estilo Jarvis ===== */
-.jarvis { position: absolute; inset: 0; z-index: 3; pointer-events: none; opacity: 0; transition: opacity .5s; display: grid; place-items: center; overflow: hidden; }
+.jarvis { position: fixed; inset: 0; z-index: 3; pointer-events: none; opacity: 0; transition: opacity .5s; display: grid; place-items: center; overflow: hidden; }
 .megabrain .jarvis, .jarvis-flash .jarvis { opacity: 1; }
 .jarvis-flash .jarvis { animation: jarvisFlash 3s forwards; }
 .jarvis-scan { position: absolute; inset: 0; background: repeating-linear-gradient(0deg, #6bffe010 0 2px, transparent 2px 6px); animation: scan 4s linear infinite; }
@@ -313,7 +319,7 @@ button:focus-visible { outline: 3px solid var(--ink); outline-offset: 4px; }
 .has-face .shades { opacity: 0 !important; }
 .bg-favela { background: radial-gradient(circle, #ff4fd8aa 1.5px, transparent 2.5px) 0 0 / 26px 20px, radial-gradient(circle, #00e5ff88 1.5px, transparent 2.5px) 13px 10px / 26px 20px, linear-gradient(#12082a, #2a0f45 52%, #ff4fd8 57%, #1d0b36 59%, #0d0620) !important; }
 .bg-praia { background: linear-gradient(#ffb36b, #ff7e8a 45%, #1fb5c9 45% 62%, #f4d58d 62%) !important; }
-.bg-server { background: repeating-linear-gradient(90deg, #0b1220 0 60px, #111c33 60px 64px), radial-gradient(circle at 30% 40%, #00ff9c22, transparent 40%), #0b1220 !important; }
+.bg-server { background: radial-gradient(circle, #39ff88 1.2px, transparent 2px) 10px 8px / 64px 14px, repeating-linear-gradient(90deg, #142238 0 56px, #0a1322 56px 64px), linear-gradient(#0d1a2e, #060c16) !important; }
 .bg-espaco { background: radial-gradient(circle at 20% 30%, #fff 0 1px, transparent 2px) 0 0 / 60px 60px, radial-gradient(circle at 70% 80%, #fff 0 1px, transparent 2px) 0 0 / 90px 90px, radial-gradient(ellipse at 60% 40%, #3b1d6e, #05030c 70%) !important; }
 
 /* ===== Menu com abas ===== */
@@ -355,3 +361,138 @@ button:focus-visible { outline: 3px solid var(--ink); outline-offset: 4px; }
 .cos-item.on { border-color: var(--aura); background: color-mix(in srgb, var(--aura) 20%, transparent); }
 .cos-thumb { width: 44px; height: 44px; display: block; }
 .cos-thumb svg, .bg-swatch { width: 100%; height: 100%; display: block; }
+
+/* ===== Responsivo =====
+   Desktop: tudo numa tela, loja fixa à direita.
+   Celular em pé: FARMAR em largura total, atalhos numa linha, níveis rolando de lado.
+   Celular deitado: duas colunas (HUD e botões | Clawd). */
+.actions, .links { display: flex; gap: .75rem; flex-wrap: wrap; justify-content: center; align-items: center; }
+
+@media (max-width: 600px) {
+  .stage { gap: .6rem; padding-inline: 12px; }
+  .shop-items { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: .4rem; }
+  .item { padding: .45rem .55rem; }
+  .item-name { font-size: .9rem; }
+  .item-desc, .item-cost { font-size: .95rem; }
+  .controls { width: 100%; max-width: 420px; flex-direction: column; gap: .6rem; }
+  #farm, #prestige { width: 100%; }
+  #farm { font-size: 1.25rem; padding: .95rem 1rem; }
+  .actions { width: 100%; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: .4rem; }
+  .actions > button { display: flex; flex-direction: column; align-items: center; gap: .15rem; padding: .5rem .2rem; font-size: .8rem; }
+  .actions > button[hidden] { display: none; }
+  .links { gap: .4rem 1rem; }
+  #star { font-size: .85rem; padding: .45rem .7rem; }
+  /* 16 níveis numa linha só, rolando de lado (o atual é centralizado pelo main.ts) */
+  .ladder {
+    flex-wrap: nowrap; justify-content: flex-start; overflow-x: auto; max-width: 100%; width: 100%;
+    scrollbar-width: none; padding-bottom: 2px; mask: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+  }
+  .ladder::-webkit-scrollbar { display: none; }
+  .ladder span { flex: none; }
+  .sixseven.l { left: -6%; }
+  .sixseven.r { right: -6%; }
+  .toast { max-width: calc(100vw - 80px); font-size: .85rem; left: 12px; translate: 0 -150%; }
+  .toast.show { translate: 0 0; }
+  .jarvis-text { font-size: 1rem; top: auto; bottom: 12px; }
+}
+
+/* telas baixas em pé (celulares menores, navegador com barras) */
+@media (max-width: 600px) and (max-height: 760px) {
+  .stage { gap: .45rem; }
+  .label { font-size: .7rem; }
+  .count { font-size: clamp(2.2rem, 10vw, 3.4rem); }
+  .rank { font-size: 1rem; }
+  .mult, .next-label, .tokens, .ahead { font-size: .95rem; }
+  .mascot-wrap { width: min(220px, 52vw, 30vh); }
+  #farm { padding: .8rem 1rem; }
+}
+
+/* celular deitado: duas colunas */
+@media (max-height: 520px) and (orientation: landscape) {
+  .stage {
+    display: grid; align-content: center; justify-content: center; column-gap: 32px; row-gap: .5rem;
+    grid-template-columns: minmax(0, 420px) auto;
+    grid-template-areas: "hud mascot" "combo mascot" "controls mascot" "ladder ladder";
+  }
+  .hud { grid-area: hud; }
+  .combo { grid-area: combo; justify-self: center; }
+  .controls { grid-area: controls; flex-direction: column; gap: .5rem; }
+  .ladder { grid-area: ladder; flex-wrap: nowrap; justify-content: flex-start; overflow-x: auto; max-width: calc(100vw - 32px); scrollbar-width: none; }
+  .ladder span { flex: none; }
+  .mascot-wrap { grid-area: mascot; width: min(240px, 58vh); align-self: center; }
+  .count { font-size: clamp(2rem, 11vh, 3.2rem); }
+  .label { font-size: .7rem; }
+  .rank { font-size: 1rem; }
+  .mult, .next-label, .tokens, .ahead { font-size: .9rem; }
+  .next { margin-top: .15rem; }
+  #farm { padding: .65rem 1rem; }
+  .actions > button, #shop-toggle, #star { padding: .45rem .7rem; font-size: .85rem; }
+  .shop { max-height: 80vh; }
+  .jarvis-text { top: 12px; left: auto; right: 64px; bottom: auto; text-align: right; font-size: 1rem; }
+}
+
+/* tablets e telas grandes: aproveita o espaço */
+@media (min-width: 700px) and (min-height: 900px) {
+  .stage { gap: 1.2rem; }
+  .mascot-wrap { width: min(360px, 60vw, 34vh); }
+  .rank { font-size: 1.3rem; }
+  .mult, .next-label, .tokens, .ahead { font-size: 1.2rem; }
+  .next { width: min(360px, 80vw); height: 10px; }
+  #farm { font-size: 1.4rem; padding: 1rem 1.8rem; }
+  .combo { width: min(280px, 70vw); }
+}
+
+/* menu: nunca passa da tela, cabeçalho (abas + fechar) sempre visível ao rolar */
+.menu { box-sizing: border-box; max-height: calc(100dvh - 24px); overflow-y: auto; overscroll-behavior: contain; }
+.menu > .shop-head { position: sticky; top: -1.1rem; z-index: 1; margin: -1.1rem -1.1rem .6rem; padding: .9rem 1.1rem .6rem; background: var(--night); border-bottom: 1px solid color-mix(in srgb, var(--violet) 40%, transparent); }
+@media (max-width: 600px) {
+  .menu { width: 100vw; max-width: 100vw; height: 100dvh; max-height: 100dvh; margin: 0; border: 0; padding: 1rem; }
+  .menu > .shop-head { top: -1rem; margin: -1rem -1rem .6rem; padding: .8rem 1rem .6rem; }
+  .tabs button { font-size: .85rem; padding: .4rem .5rem; }
+  #menu-close { font-size: 1.4rem; padding: .2rem .5rem; }
+  .cos-row { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); }
+  .cos-item { font-size: .8rem; }
+}
+
+/* PC: o jogo reserva a coluna da loja à direita, então nada fica por baixo dela */
+@media (min-width: 1081px) {
+  .stage { padding-right: calc(var(--shop-w, 250px) + 32px); padding-left: 32px; }
+  .shop { width: var(--shop-w, 250px); }
+}
+/* notebooks baixos (720–800 px de altura) */
+@media (min-width: 1081px) and (max-height: 820px) {
+  .stage { gap: .55rem; }
+  .count { font-size: clamp(2.6rem, 9vh, 4.4rem); }
+  .mascot-wrap { width: min(250px, 32vh); }
+  .rank { font-size: 1rem; }
+  .mult, .next-label, .tokens, .ahead { font-size: 1rem; }
+  #farm { padding: .7rem 1.3rem; }
+}
+/* Full HD e maiores: aumenta tudo */
+@media (min-width: 1600px) and (min-height: 1000px) {
+  :root { --shop-w: 330px; }
+  .stage { gap: 1.3rem; }
+  .label { font-size: 1rem; }
+  .count { font-size: clamp(5rem, 9vh, 7.5rem); }
+  .rank { font-size: 1.6rem; }
+  .mult, .next-label, .tokens, .ahead { font-size: 1.4rem; }
+  .next { width: min(440px, 80vw); height: 12px; }
+  .mascot-wrap { width: min(440px, 38vh); }
+  .sixseven { font-size: 3rem; }
+  .combo { width: 340px; height: 24px; }
+  .combo > span { line-height: 24px; font-size: 1.25rem; }
+  #farm { font-size: 1.7rem; padding: 1.1rem 2.2rem; }
+  .actions > button, #shop-toggle, #prestige, .menu-open { font-size: 1.2rem; padding: .8rem 1.2rem; }
+  #star { font-size: 1.15rem; padding: .8rem 1.2rem; }
+  #reset { font-size: 1rem; }
+  .ladder { max-width: 900px; gap: .5rem; }
+  .ladder span { font-size: 1.3rem; padding: .2rem .6rem; }
+  .shop { padding: 1.1rem; }
+  .shop h2 { font-size: 1rem; }
+  .item { padding: .75rem .9rem; }
+  .item-name { font-size: 1.2rem; }
+  .item-desc, .item-cost { font-size: 1.2rem; }
+  .menu { width: min(620px, calc(100vw - 32px)); font-size: 1.1rem; }
+  .toast { font-size: 1.1rem; }
+  .mute { font-size: 1.7rem; }
+}

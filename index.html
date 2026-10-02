@@ -145,12 +145,16 @@
   <div class="controls">
     <button id="farm" type="button">FARMAR AURA <span id="gain">+67</span></button>
     <button id="prestige" type="button" hidden>✨ Renascer (+25%)</button>
-    <button class="menu-open" type="button" data-tab="ranking" id="ranking-open" hidden>🏆 Ranking</button>
-    <button class="menu-open" type="button" data-tab="ach">🎖 Conquistas</button>
-    <button class="menu-open" type="button" data-tab="cos">👕 Enfeites</button>
-    <button id="shop-toggle" type="button" aria-controls="shop" aria-expanded="false">🛒 Loja</button>
-    <a id="star" href="https://github.com/EuGabrielNolasco/clawd-aura-farm" target="_blank" rel="noopener">⭐ Dar estrela no GitHub</a>
-    <button id="reset" type="button">zerar aura</button>
+    <div class="actions">
+      <button class="menu-open" type="button" data-tab="ranking" id="ranking-open" hidden>🏆 <span>Ranking</span></button>
+      <button class="menu-open" type="button" data-tab="ach">🎖 <span>Conquistas</span></button>
+      <button class="menu-open" type="button" data-tab="cos">👕 <span>Enfeites</span></button>
+      <button id="shop-toggle" type="button" aria-controls="shop" aria-expanded="false">🛒 <span>Loja</span></button>
+    </div>
+    <div class="links">
+      <a id="star" href="https://github.com/EuGabrielNolasco/clawd-aura-farm" target="_blank" rel="noopener">⭐ Dar estrela no GitHub</a>
+      <button id="reset" type="button">zerar aura</button>
+    </div>
   </div>
   <div class="ladder" id="ladder"></div>
 

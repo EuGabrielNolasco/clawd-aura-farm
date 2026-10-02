@@ -115,6 +115,71 @@ export function mountDev(h: DevHooks) {
   });
   select.addEventListener("change", () => { enterSandbox(); actions.goto(); });
 
+  // Telas por URL, para revisar o layout sem clicar (ex.: ?screen=cos&level=8&clean):
+  //   level=N · tokens=N · screen=shop|ranking|ach|cos|mega|golden|thief|toast|dev · clean (esconde o 🛠)
+  const q = new URLSearchParams(location.search);
+  if (q.size) {
+    enterSandbox();
+    if (q.has("clean")) btn.hidden = true;
+    // na auditoria mede a posição final: sem transições (a aba pode não estar desenhando quadros)
+    if (q.has("audit")) document.head.append(Object.assign(document.createElement("style"), { textContent: "*{transition:none!important}" }));
+    if (q.has("level")) goTo(Number(q.get("level")));
+    if (q.has("tokens")) { h.state().tokens = Number(q.get("tokens")); h.render(); }
+    const screen = q.get("screen");
+    const click = (sel: string) => document.querySelector<HTMLElement>(sel)?.click();
+    setTimeout(() => {
+      if (screen === "shop") click("#shop-toggle");
+      if (screen === "ranking" || screen === "ach" || screen === "cos") click(`[data-tab="${screen}"]`);
+      if (screen === "mega") { h.state().buffUntil = h.now() + 67; h.render(); }
+      if (screen === "golden") actions.golden();
+      if (screen === "thief") actions.thief();
+      if (screen === "toast") h.toast("🎖 Conquista: Usa o Mega Brain (+15 fichas)");
+      if (screen === "dev") panel.classList.add("open");
+    }, 300);
+    if (q.has("audit")) setTimeout(() => parent.postMessage({ audit: audit(), href: location.href, size: `${innerWidth}x${innerHeight}` }, "*"), 2000);
+  }
+
   // mantém a lista no nível atual
   setInterval(() => { if (document.activeElement !== select) select.value = String(levelOf(h.state().total)); }, 500);
 }
+
+/** Problemas de layout visíveis: coisas cortadas nas bordas e blocos principais se sobrepondo. */
+function audit(): string[] {
+  const W = innerWidth, H = innerHeight, out: string[] = [];
+  const name = (el: Element) => el.id ? `#${el.id}` : `.${[...el.classList].join(".") || el.tagName.toLowerCase()}`;
+  const visible = (el: Element) => {
+    const cs = getComputedStyle(el);
+    return cs.display !== "none" && cs.visibility !== "hidden" && Number(cs.opacity) > 0 && !(el as HTMLElement).hidden;
+  };
+  // elementos interativos ou de texto cortados pelas bordas da tela
+  const sel = "button, a, input, .count, .rank, .mult, .next-label, .tokens, .ahead, .ladder span, .item, .cos-item, .ach-list li, .top li, .toast.show, .banner.show, .jarvis-text, .combo";
+  for (const el of document.querySelectorAll(sel)) {
+    if (!visible(el) || el.closest(".golden, .thief, .dev-panel:not(.open), .shop:not(.open) .item, dialog:not([open])")) continue;
+    const r = el.getBoundingClientRect();
+    if (!r.width || !r.height) continue;
+    // dentro de um container com rolagem, só conta se o container estiver cortado
+    if (el.closest(".menu, .shop") && !el.matches(".menu, .shop")) continue;
+    const scroller = el.parentElement && getComputedStyle(el.parentElement).overflowX;
+    if (scroller === "auto" || scroller === "scroll") continue;
+    if (r.left < -1 || r.right > W + 1 || r.top < -1 || r.bottom > H + 1)
+      out.push(`cortado: ${name(el)} [${Math.round(r.left)},${Math.round(r.top)} → ${Math.round(r.right)},${Math.round(r.bottom)}]`);
+  }
+  for (const el of document.querySelectorAll(".menu[open], .shop.open")) {
+    const r = el.getBoundingClientRect();
+    if (r.left < -1 || r.right > W + 1 || r.top < -1 || r.bottom > H + 1) out.push(`cortado: ${name(el)} [${Math.round(r.left)},${Math.round(r.top)} → ${Math.round(r.right)},${Math.round(r.bottom)}]`);
+  }
+  // blocos principais não podem se sobrepor
+  const blocks = [".hud", ".mascot-wrap", ".combo", ".controls", ".ladder", ".shop"].map(s => document.querySelector(s)).filter((e): e is Element => !!e && visible(e));
+  const rects = blocks.map(b => [name(b), b.getBoundingClientRect()] as const);
+  for (let i = 0; i < rects.length; i++) for (let j = i + 1; j < rects.length; j++) {
+    const [an, a] = rects[i], [bn, b] = rects[j];
+    // a gaveta da loja (celular) cobre o jogo de propósito quando aberta e fica fora da tela fechada
+    const drawer = (k: number) => getComputedStyle(blocks[k]).position === "fixed";
+    if ((an.includes("shop") && drawer(i)) || (bn.includes("shop") && drawer(j))) continue;
+    const ox = Math.min(a.right, b.right) - Math.max(a.left, b.left), oy = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
+    if (ox > 4 && oy > 4) out.push(`sobreposição: ${an} × ${bn} (${Math.round(ox)}×${Math.round(oy)} px)`);
+  }
+  if (document.documentElement.scrollWidth > W + 1) out.push(`rolagem horizontal: ${document.documentElement.scrollWidth}px > ${W}px`);
+  return out;
+}
+

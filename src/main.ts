@@ -234,6 +234,9 @@ function render() {
     level = l;
     for (let i = 1; i < RANKS.length; i++) stage.classList.toggle("l" + i, i <= l);
     ladderEls.forEach((el, i) => { el.classList.toggle("on", i <= l); el.classList.toggle("now", i === l); });
+    // no celular a escada rola de lado: centraliza o nível atual sem mexer na rolagem da página
+    const ladder = $("ladder"), now = ladderEls[l];
+    ladder.scrollLeft = now.offsetLeft - (ladder.clientWidth - now.clientWidth) / 2;
     $("rank").textContent = RANKS[l][1];
     if (up) levelUp(l);
   }
