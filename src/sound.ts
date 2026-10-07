@@ -104,4 +104,12 @@ export const sfx = {
   },
   /** Passou alguém no ranking. */
   overtake: () => play([[587, 0.07], [784, 0.07], [988, 0.07], [1175, 0.2]], "square", 0.06),
+  /** Roleta girando e prêmio. */
+  wheelTick: () => play([[1200, 0.02]], "triangle", 0.03),
+  wheelWin: () => {
+    play([[659, 0.08], [880, 0.08], [1175, 0.08], [1760, 0.3]], "triangle", 0.08);
+    chord([880, 1175, 1760], 0.5, "square", 0.03, 0.24);
+  },
+  copy: () => play([[1047, 0.04], [1319, 0.08]], "triangle", 0.05),
 };
+

@@ -6,10 +6,16 @@
 <meta name="description" content="Clicker em que o Clawd faz o six seven enquanto você farma aura.">
 <title>Clawd Aura Farm</title>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="manifest" href="/manifest.webmanifest">
 <meta name="theme-color" content="#140f24">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Clawd Aura">
+<link rel="apple-touch-icon" href="/favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;700&family=VT323&display=swap">
 </head>
+
 <body>
 
 <div class="stage" id="stage">
@@ -140,15 +146,23 @@
     <div class="banner" id="banner"></div>
   </div>
 
-  <div class="combo" id="combo" aria-hidden="true"><i id="combo-bar"></i><span id="combo-text">COMBO ×1</span></div>
+  <div class="combo" id="combo" aria-hidden="true">
+    <i id="combo-bar"></i>
+    <span id="combo-text">COMBO ×1</span>
+    <span id="cps-text" class="cps-val">0.0 CPS</span>
+  </div>
 
   <div class="controls">
     <button id="farm" type="button">FARMAR AURA <span id="gain">+67</span></button>
     <button id="prestige" type="button" hidden>✨ Renascer (+25%)</button>
     <div class="actions">
+      <button class="menu-open" type="button" data-tab="account" id="account-open">📱 <span>Conta</span></button>
+      <button class="menu-open" type="button" data-tab="wheel" id="wheel-open">🎰 <span id="wheel-btn-label">Roleta</span> <b id="wheel-badge" class="badge" hidden>1</b></button>
       <button class="menu-open" type="button" data-tab="ranking" id="ranking-open" hidden>🏆 <span>Ranking</span></button>
       <button class="menu-open" type="button" data-tab="ach">🎖 <span>Conquistas</span></button>
       <button class="menu-open" type="button" data-tab="cos">👕 <span>Enfeites</span></button>
+      <button class="menu-open" type="button" data-tab="stats">📊 <span>Stats</span></button>
+      <button class="menu-open" type="button" data-tab="guide">📖 <span>Guia</span></button>
       <button id="shop-toggle" type="button" aria-controls="shop" aria-expanded="false">🛒 <span>Loja</span></button>
     </div>
     <div class="links">
@@ -161,13 +175,90 @@
   <dialog class="menu" id="menu" aria-label="Menu">
     <div class="shop-head">
       <div class="tabs" role="tablist">
+        <button role="tab" type="button" data-tab="account" id="tab-account">📱 Conta & PC</button>
+        <button role="tab" type="button" data-tab="wheel" id="tab-wheel">🎰 Roleta 67</button>
         <button role="tab" type="button" data-tab="ranking" id="tab-ranking" hidden>🏆 Ranking</button>
         <button role="tab" type="button" data-tab="ach">🎖 Conquistas</button>
         <button role="tab" type="button" data-tab="cos">👕 Enfeites</button>
+        <button role="tab" type="button" data-tab="stats">📊 Estatísticas</button>
+        <button role="tab" type="button" data-tab="guide">📖 Guia</button>
       </div>
       <button id="menu-close" type="button" aria-label="Fechar">✕</button>
     </div>
 
+    <!-- Painel: Conta, Sincronização PC <-> Celular e Backup -->
+    <section class="panel" data-panel="account" role="tabpanel">
+      <div class="account-card">
+        <div class="acc-avatar" id="acc-avatar"></div>
+        <div class="acc-info">
+          <h3 id="acc-name">Jogador Anônimo</h3>
+          <p id="acc-status" class="acc-badge">🟢 Conectado na Nuvem</p>
+          <p class="acc-meta"><small id="acc-id-short">ID: ...</small> · <small id="acc-rank-label">Sem ranking</small></p>
+        </div>
+      </div>
+
+      <div class="acc-box highlight">
+        <h4>📲 Jogar no PC e Celular com a mesma conta</h4>
+        <p class="acc-desc">Abra no outro aparelho e continue exatamente de onde parou!</p>
+        <div class="sync-options">
+          <div class="qr-wrap" id="acc-qr-wrap">
+            <div id="acc-qr" class="qr-canvas"></div>
+            <p><small>📷 Aponte a câmera do celular para abrir esta conta direto</small></p>
+          </div>
+          <div class="sync-actions">
+            <button type="button" id="copy-sync-link" class="btn-accent">📋 Copiar Link de Acesso Direto</button>
+            <button type="button" id="copy-sync-token" class="btn-secondary">🔑 Copiar Chave da Conta</button>
+            <p class="sync-tip"><small>Envie o link para você mesmo (WhatsApp, Telegram ou e-mail) e clique nele no PC ou celular.</small></p>
+          </div>
+        </div>
+      </div>
+
+      <div class="acc-box">
+        <h4>🔄 Entrar em uma conta existente</h4>
+        <p class="acc-desc">Cole a chave ou o link copiado do outro aparelho para sincronizar:</p>
+        <form id="import-account-form" class="acc-form">
+          <div class="name-row">
+            <input id="import-account-input" placeholder="Cole AURA_... ou o link completo" autocomplete="off" required>
+            <button type="submit" class="btn-accent">Conectar</button>
+          </div>
+          <p class="name-msg" id="import-account-msg" role="status"></p>
+        </form>
+      </div>
+
+      <div class="acc-box">
+        <h4>💾 Backup Local (Offline)</h4>
+        <p class="acc-desc">Baixe ou restaure o arquivo de progresso no seu computador ou celular:</p>
+        <div class="acc-backup-row">
+          <button type="button" id="btn-export-json" class="btn-secondary">⬇ Baixar Backup (.json)</button>
+          <label class="btn-secondary file-btn">
+            ⬆ Carregar Backup (.json)
+            <input type="file" id="input-import-json" accept=".json" hidden>
+          </label>
+        </div>
+        <p class="name-msg" id="backup-msg" role="status"></p>
+      </div>
+    </section>
+
+    <!-- Painel: Roleta da Sorte 67 -->
+    <section class="panel" data-panel="wheel" role="tabpanel">
+      <div class="wheel-header">
+        <h3>🎰 Roleta da Sorte 67</h3>
+        <p class="my-rank">Você tem <b id="wheel-spins-val">1</b> giro(s) disponível(is)!</p>
+      </div>
+      <div class="wheel-container">
+        <div class="wheel-pointer" aria-hidden="true">▼</div>
+        <div class="wheel-disc" id="wheel-disc">
+          <svg viewBox="0 0 300 300" class="wheel-svg" id="wheel-svg" shape-rendering="geometricPrecision">
+            <g id="wheel-slices"></g>
+          </svg>
+        </div>
+        <button type="button" id="wheel-spin-btn" class="wheel-spin-button">GIRAR!</button>
+      </div>
+      <div class="wheel-result" id="wheel-result"></div>
+      <p class="wheel-tip"><small>🎁 Ganhe <b>+1 giro grátis</b> a cada novo dia no login diário, ao subir de nível e capturando ladrões!</small></p>
+    </section>
+
+    <!-- Painel: Ranking -->
     <section class="panel" data-panel="ranking" role="tabpanel">
       <p class="my-rank" id="my-rank">Conectando…</p>
       <form id="name-form">
@@ -187,22 +278,76 @@
       <p class="net" id="net"></p>
     </section>
 
+    <!-- Painel: Conquistas -->
     <section class="panel" data-panel="ach" role="tabpanel">
       <p class="my-rank" id="ach-summary"></p>
       <ul class="ach-list" id="ach-list"></ul>
     </section>
 
+    <!-- Painel: Enfeites -->
     <section class="panel" data-panel="cos" role="tabpanel">
       <div class="cos-top">
         <div class="cos-preview" id="cos-preview"></div>
-        <p class="my-rank"><b id="cos-tokens">0</b> Fichas 67<br><small>Ganhe com conquistas, login diário e pegando ladrões.</small></p>
+        <p class="my-rank"><b id="cos-tokens">0</b> Fichas 67<br><small>Ganhe com conquistas, login diário, roleta e ladrões.</small></p>
       </div>
       <div id="cos-list"></div>
+    </section>
+
+    <!-- Painel: Estatísticas da Vida -->
+    <section class="panel" data-panel="stats" role="tabpanel">
+      <div class="stats-head">
+        <h3>📊 Estatísticas da Carreira</h3>
+        <p class="my-rank">Seu progresso completo em todas as vidas</p>
+      </div>
+      <div class="stats-grid" id="stats-grid"></div>
+    </section>
+
+    <!-- Painel: Guia Vivo do Jogo -->
+    <section class="panel" data-panel="guide" role="tabpanel">
+      <div class="guide-box">
+        <h3>📖 Guia & Segredos do 6-7</h3>
+        
+        <details open>
+          <summary>🚀 Como farmar aura rápido?</summary>
+          <p>1. <b>Combo de Cliques:</b> Clique com rapidez para atingir até ×3 de multiplicação nos cliques.<br>
+          2. <b>Loja de Upgrades:</b> Compre "Clawd auxiliar", "Fábrica" e "Datacenter" para gerar aura passiva mesmo com a aba fechada (até 12h fora!).<br>
+          3. <b>Críticos:</b> O "Olhar sigma" aumenta sua chance de crítico, que multiplica o ganho por 10!</p>
+        </details>
+
+        <details>
+          <summary>📲 Como jogar no celular e no computador com a mesma conta?</summary>
+          <p>Vá na aba <b>Conta & PC</b>. Você pode:<br>
+          • Escanear o <b>QR Code</b> com a câmera do seu celular.<br>
+          • Ou clicar em <b>Copiar Link</b> e mandar para seu WhatsApp/Telegram/email.<br>
+          Ao abrir o link no outro aparelho, seu progresso sincroniza automaticamente na hora!</p>
+        </details>
+
+        <details>
+          <summary>🧠 Cérebro Dourado e Modo Mega Brain</summary>
+          <p>De tempos em tempos, um Cérebro Dourado cruza a tela voando. Clique nele imediatamente para ativar o <b>Modo Mega Brain</b>: o Jarvis entra em ação e toda a sua aura (cliques e automática) é multiplicada por <b>×7 por 67 segundos</b>!</p>
+        </details>
+
+        <details>
+          <summary>🦹 O Ladrão e as Fichas 67</summary>
+          <p>A partir do nível <b>Coop Thief (nível 8)</b>, um ladrãozinho tenta roubar aura. Capture-o para ganhar <b>Fichas 67</b> e giros extras na Roleta! Fichas 67 servem para comprar roupas, chapéus, óculos e cenários na Loja de Enfeites.</p>
+        </details>
+
+        <details>
+          <summary>✨ Prestígio (Renascer)</summary>
+          <p>Ao alcançar o nível máximo ("O Próprio 67"), você pode <b>Renascer</b>. Seus upgrades desta vida resetam, mas você ganha <b>+25% permanente</b> em toda aura acumulável a cada renascimento (⭐), mantendo todas as fichas, conquistas e enfeites!</p>
+        </details>
+
+        <details>
+          <summary>🇧🇷 Os 16 Níveis e Memes BR</summary>
+          <p>A progressão homenageia grandes memes e culturas brasileiras da internet: de <i>NPC</i> e <i>Cria</i> até <i>Sigma</i>, <i>Mega Brain</i>, <i>Coop Thief</i>, <i>Lenda do 6-7</i> e <i>O Próprio 67</i>. Cada nível desbloqueia visuais, cores e auras novas para o mascote!</p>
+        </details>
+      </div>
     </section>
   </dialog>
 
   <aside class="shop" id="shop" aria-label="Loja de upgrades">
     <div class="shop-head"><h2>Loja</h2><button id="shop-close" type="button" aria-label="Fechar loja">✕</button></div>
+
     <div class="shop-items" id="shop-items"></div>
   </aside>
 </div>

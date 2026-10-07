@@ -53,7 +53,12 @@ const MAX_QUEUE = 1000;
  * Envia os eventos em lotes a cada 2 s. Quando o servidor responde, `onSync` recebe o estado
  * oficial e os eventos que aconteceram enquanto o lote estava a caminho, para reaplicar por cima.
  */
-export function createSync(p: Player, onSync: (r: ServerState, pending: string) => void, onStatus: (ok: boolean) => void) {
+export async function fetchPlayerState(p: Player): Promise<ServerState> {
+  return rpc<ServerState>("aura_sync", { p_id: p.id, p_secret: p.secret, p_events: "" });
+}
+
+export function createSync(initialPlayer: Player, onSync: (r: ServerState, pending: string) => void, onStatus: (ok: boolean) => void) {
+  let p = initialPlayer;
   let queue = "";
   let inflight = false;
   let paused = false;
@@ -91,8 +96,11 @@ export function createSync(p: Player, onSync: (r: ServerState, pending: string) 
     /** Para de sincronizar até recarregar a página (usado pelo painel dev). */
     pause() { paused = true; queue = ""; },
     flush,
+    getPlayer: () => p,
+    setPlayer(newP: Player) { p = newP; queue = ""; },
     setName: (name: string) => rpc<void>("aura_set_name", { p_id: p.id, p_secret: p.secret, p_name: name }),
     top: () => rpc<RankRow[]>("aura_top", { p_limit: 10 }),
     around: () => rpc<RankRow[]>("aura_around", { p_id: p.id, p_secret: p.secret }),
   };
 }
+

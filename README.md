@@ -11,8 +11,11 @@ Jogo incremental (*idle clicker*) para o navegador. O Clawd, mascote do Claude C
 
 ## Sumário
 
+- [Documentação viva (`docs/`)](#documentação-viva)
 - [Funcionalidades](#funcionalidades)
 - [Como jogar](#como-jogar)
+- [Sincronização PC ⇄ Celular](#sincronização-pc--celular)
+- [Roleta da Sorte 67](#roleta-da-sorte-67)
 - [Níveis](#níveis)
 - [Loja](#loja)
 - [Eventos, conquistas e enfeites](#eventos-conquistas-e-enfeites)
@@ -25,13 +28,31 @@ Jogo incremental (*idle clicker*) para o navegador. O Clawd, mascote do Claude C
 - [Contribuindo](#contribuindo)
 - [Licença](#licença)
 
+
+## Documentação Viva
+
+O projeto conta com uma central de documentação completa e atualizada em [`docs/`](docs/):
+
+- **[docs/INDEX.md](docs/INDEX.md):** Hub central da documentação viva.
+- **[docs/ARQUITETURA.md](docs/ARQUITETURA.md):** Arquitetura técnica, segurança, anti-cheat e CSP.
+- **[docs/CONTAS_E_SINCRONIZACAO.md](docs/CONTAS_E_SINCRONIZACAO.md):** Guia de sincronização entre PC e Celular via QR Code, chave e links.
+- **[docs/MECANICAS_E_ECONOMIA.md](docs/MECANICAS_E_ECONOMIA.md):** Fórmulas matemáticas, curvas dos 16 níveis e eventos.
+- **[docs/CONQUISTAS_E_COSMETICOS.md](docs/CONQUISTAS_E_COSMETICOS.md):** As 15 conquistas e os 16 enfeites em pixel art SVG.
+- **[docs/CHANGELOG.md](docs/CHANGELOG.md):** Histórico completo de versões (v1.0.0 a v2.1.0).
+- **[docs/ROADMAP.md](docs/ROADMAP.md):** Próximas ideias e melhorias planejadas.
+
 ## Funcionalidades
 
-- **Progressão longa:** os primeiros níveis saem em segundos, o último leva cerca de 3 dias e a loja completa cerca de 1 semana.
+- **Sincronização entre PC e Celular:** Jogue no celular e continue no computador (ou vice-versa). Acesso via **QR Code**, link direto de compartilhamento (`#sync=...`), chave da conta `AURA_...` ou backup em arquivo JSON.
+- **Roleta da Sorte 67:** Minigame diário de engajamento! Ganhe giros diários e gire a roleta para faturar Fichas 67, ativação instantânea do Mega Brain ou rajadas de aura passiva.
+- **Painel de Estatísticas da Carreira:** Acompanhe cliques totais, taxa real de crítico, recordes de combo e eventos capturados.
+- **Barras de Progresso nas Conquistas:** Veja visualmente o quanto falta para desbloquear cada uma das 15 conquistas.
+- **Feedback Tátil & Mobile First:** Vibração háptica no celular (`navigator.vibrate`) em cliques normais, críticos e eventos, além de medidor de CPS em tempo real.
+- **Instalável (PWA):** Adicione à tela inicial do celular como aplicativo nativo, rodando em tela cheia sem barra de navegador.
 - **16 níveis com memes BR**, de NPC a O Próprio 67, passando por Cria, Brabo, O Pai Tá On, Mega Brain e Coop Thief.
 - **Combo de cliques:** clicar rápido multiplica a aura até ×3.
 - **Cérebro Dourado:** aparece de vez em quando; pegar ativa o *Modo Mega Brain*, com HUD estilo Jarvis e ×7 em toda a aura por 67 segundos.
-- **Ladrão do Coop Thief:** a partir do nível 8, um ladrãozinho atravessa a tela; pegar rende Fichas 67.
+- **Ladrão do Coop Thief:** a partir do nível 8, um ladrãozinho atravessa a tela; pegar rende Fichas 67 e +1 giro na Roleta.
 - **Loja com 6 upgrades**, cada um com limite de compras.
 - **Fichas 67, conquistas e login diário:** 15 conquistas e uma recompensa por dias seguidos jogando.
 - **Loja de enfeites:** 16 itens entre fundos, chapéus, óculos, roupas e cores para o Clawd, pagos com Fichas 67.
@@ -47,12 +68,28 @@ Jogo incremental (*idle clicker*) para o navegador. O Clawd, mascote do Claude C
 1. Clique no Clawd ou no botão **FARMAR AURA**. Clicar rápido enche o **combo**.
 2. Gaste a aura na **loja**. Os upgrades de aura por segundo continuam rendendo mesmo com o jogo fechado.
 3. Fique de olho no **Cérebro Dourado** voando pela tela e, a partir do nível Coop Thief, no **ladrão**.
-4. Junte **Fichas 67** com conquistas, login diário e ladrões, e gaste em **enfeites**.
+4. Junte **Fichas 67** com conquistas, login diário, ladrões e a **Roleta**, e gaste em **enfeites**.
 5. O nível é definido pela aura farmada nesta vida, então gastar na loja não faz você cair de nível.
 6. No último nível, **renasça** para ganhar +25% permanente.
 7. Abra o **Ranking**, escolha um apelido e veja quem está logo à sua frente.
+8. Para jogar no celular e no computador com a mesma conta, use o painel **Conta & PC** e aponte a câmera para o QR Code!
+
+## Sincronização PC ⇄ Celular
+
+O jogo não prende seu save ao navegador:
+- **Escanear QR Code:** Abra a aba **Conta & PC** no computador e aponte a câmera do celular para o QR Code. O celular abre direto com o seu save sincronizado!
+- **Copiar Link Direto:** Clique em *Copiar Link de Acesso Direto* e envie para si mesmo no WhatsApp ou e-mail. Ao abrir, a conta é carregada na hora.
+- **Chave da Conta:** Você pode copiar seu código `AURA_...` e colar na caixa *Entrar em uma conta existente* em qualquer dispositivo.
+- **Backup JSON:** Exporte e importe saves em arquivo para segurança 100% offline.
+
+## Roleta da Sorte 67
+
+Um minigame diário para manter você progredindo:
+- **Como ganhar giros:** 1 giro grátis no primeiro login de cada dia, +1 giro a cada subida de nível e +1 giro ao capturar o ladrão.
+- **Prêmios:** Fichas 67 (5, 10 ou 25), Rajadas de Aura Passiva instantânea (10 ou 15 minutos de produção) e Ativação do Modo Mega Brain (×7 por 67s)!
 
 ## Níveis
+
 
 A economia foi calibrada por simulação. Os tempos abaixo são de um jogador com 3 sessões de 40 minutos por dia, clicando 4 vezes por segundo e pegando os Cérebros Dourados. Quem joga menos chega um pouco depois, porque a aura passiva faz a maior parte do trabalho.
 

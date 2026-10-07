@@ -79,6 +79,114 @@ export function player(): Player {
   return p;
 }
 
+export function savePlayer(p: Player) {
+  try {
+    localStorage.setItem(PLAYER_KEY, JSON.stringify(p));
+  } catch {
+    // ignora se storage estiver bloqueado
+  }
+}
+
+/**
+ * Codifica a identidade do jogador em um token compacto seguro para compartilhar e usar no link de sincronização.
+ * Formato: AURA_<base64url(id:secret)>
+ */
+export function exportAccountToken(p: Player): string {
+  const raw = `${p.id}:${p.secret}`;
+  const b64 = btoa(raw).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  return `AURA_${b64}`;
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const SECRET_RE = /^[0-9a-f]{32,128}$/i;
+
+/**
+ * Decodifica uma chave de conta. Aceita:
+ * - Token no formato AURA_<base64> ou base64 direto
+ * - URL completa contendo #sync= ou ?sync=
+ * - Formato bruto id:secret
+ */
+export function parseAccountToken(input: string): Player | null {
+  if (!input || typeof input !== "string") return null;
+  let str = input.trim();
+
+  // se colou a URL inteira, extrai o parâmetro sync
+  if (str.includes("sync=")) {
+    const m = str.match(/sync=([^&#\s]+)/);
+    if (m) str = decodeURIComponent(m[1]);
+  }
+
+  // remove prefixo se houver
+  if (str.startsWith("AURA_")) str = str.slice(5);
+
+  // tenta primeiro como id:secret direto
+  if (str.includes(":")) {
+    const [id, secret] = str.split(":");
+    if (UUID_RE.test(id) && SECRET_RE.test(secret)) return { id: id.toLowerCase(), secret: secret.toLowerCase() };
+  }
+
+  // tenta decodificar base64url
+  try {
+    let b64 = str.replace(/-/g, "+").replace(/_/g, "/");
+    while (b64.length % 4 !== 0) b64 += "=";
+    const decoded = atob(b64);
+    const parts = decoded.split(":");
+    if (parts.length === 2 && UUID_RE.test(parts[0]) && SECRET_RE.test(parts[1])) {
+      return { id: parts[0].toLowerCase(), secret: parts[1].toLowerCase() };
+    }
+  } catch {
+    // string inválida
+  }
+
+  return null;
+}
+
+/** Gera a URL direta com a chave da conta no fragmento (#sync=...) para abrir no PC ou celular. */
+export function accountShareUrl(p: Player): string {
+  try {
+    const origin = window.location.origin;
+    const path = window.location.pathname;
+    return `${origin}${path}#sync=${exportAccountToken(p)}`;
+  } catch {
+    return `#sync=${exportAccountToken(p)}`;
+  }
+}
+
+/** Exporta backup em JSON (inclui o save e a chave da conta). */
+export function exportSaveJson(s: State, p: Player): string {
+  return JSON.stringify(
+    {
+      app: "clawd-aura-farm",
+      version: "2.1.0",
+      exportedAt: new Date().toISOString(),
+      player: p,
+      state: { ...s, savedAt: Date.now() },
+    },
+    null,
+    2
+  );
+}
+
+/** Restaura backup em JSON. */
+export function importSaveJson(raw: string): { state: State; player?: Player } | null {
+  try {
+    const obj = JSON.parse(raw);
+    if (!obj || typeof obj !== "object") return null;
+    const stateData = obj.state || obj;
+    const s = sanitize(stateData);
+    let p: Player | undefined;
+    if (obj.player && typeof obj.player === "object") {
+      const maybe = obj.player as Record<string, unknown>;
+      if (typeof maybe.id === "string" && typeof maybe.secret === "string" && UUID_RE.test(maybe.id) && SECRET_RE.test(maybe.secret)) {
+        p = { id: maybe.id.toLowerCase(), secret: maybe.secret.toLowerCase() };
+      }
+    }
+    return { state: s, player: p };
+  } catch {
+    return null;
+  }
+}
+
 export function loadMuted() {
   try { return localStorage.getItem(MUTE_KEY) === "1"; } catch { return false; }
 }
@@ -86,3 +194,4 @@ export function loadMuted() {
 export function saveMuted(muted: boolean) {
   try { localStorage.setItem(MUTE_KEY, muted ? "1" : "0"); } catch { /* ignora */ }
 }
+

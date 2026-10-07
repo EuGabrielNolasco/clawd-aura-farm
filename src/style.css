@@ -496,3 +496,272 @@ button:focus-visible { outline: 3px solid var(--ink); outline-offset: 4px; }
   .toast { font-size: 1.1rem; }
   .mute { font-size: 1.7rem; }
 }
+
+/* ===== CPS e Badges ===== */
+.cps-val {
+  font-family: var(--mono);
+  font-size: .85rem;
+  color: var(--aura);
+  margin-left: .5rem;
+  opacity: .9;
+}
+.badge {
+  background: #ff6b6b;
+  color: #fff;
+  border-radius: 999px;
+  padding: 1px 6px;
+  font-size: .75rem;
+  font-family: var(--mono);
+  vertical-align: middle;
+  animation: pulse 1s infinite alternate;
+}
+
+/* ===== Conta & Sincronização PC <-> Celular ===== */
+.account-card {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  background: color-mix(in srgb, var(--violet) 20%, var(--night));
+  border: 1px solid color-mix(in srgb, var(--violet) 40%, transparent);
+  padding: .85rem 1rem;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  text-align: left;
+}
+.acc-avatar {
+  width: 56px;
+  height: 56px;
+  flex: none;
+  background: color-mix(in srgb, var(--night) 80%, transparent);
+  border-radius: 6px;
+  padding: 4px;
+  box-sizing: border-box;
+}
+.acc-avatar svg { width: 100%; height: 100%; display: block; }
+.acc-info h3 { margin: 0 0 .2rem; font-size: 1.15rem; color: var(--aura); }
+.acc-badge { margin: 0; font-size: .85rem; color: #6bffb8; font-weight: 700; }
+.acc-meta { margin: .2rem 0 0; color: var(--muted); font-size: .85rem; }
+
+.acc-box {
+  background: color-mix(in srgb, var(--dusk) 50%, var(--night));
+  border: 1px solid color-mix(in srgb, var(--violet) 25%, transparent);
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  text-align: left;
+}
+.acc-box.highlight {
+  border-color: var(--aura);
+  background: color-mix(in srgb, var(--aura) 8%, var(--night));
+}
+.acc-box h4 { margin: 0 0 .3rem; font-size: 1rem; color: var(--ink); }
+.acc-desc { margin: 0 0 .8rem; font-size: .85rem; color: var(--muted); }
+
+.sync-options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 1.2rem;
+  margin-top: .6rem;
+}
+.qr-wrap {
+  text-align: center;
+  background: #fff;
+  color: #140f24;
+  padding: .6rem .6rem .3rem;
+  border-radius: 8px;
+  width: fit-content;
+  margin: 0 auto;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.4);
+}
+.qr-canvas svg {
+  display: block;
+  width: 140px;
+  height: 140px;
+  margin: 0 auto;
+}
+.qr-wrap p { margin: .3rem 0 0; color: #222; font-size: .75rem; font-weight: 700; }
+
+.sync-actions {
+  display: flex;
+  flex-direction: column;
+  gap: .6rem;
+  flex: 1;
+  min-width: 200px;
+}
+.btn-accent {
+  background: var(--aura);
+  color: var(--night);
+  border: none;
+  font-family: var(--display);
+  font-weight: 700;
+  padding: .65rem 1rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: transform .1s, filter .1s;
+}
+.btn-accent:hover { filter: brightness(1.15); transform: translateY(-1px); }
+.btn-accent:active { transform: translateY(1px); }
+
+.btn-secondary {
+  background: color-mix(in srgb, var(--violet) 35%, transparent);
+  color: var(--ink);
+  border: 1px solid color-mix(in srgb, var(--violet) 60%, transparent);
+  font-family: var(--display);
+  font-weight: 700;
+  padding: .55rem .9rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background .15s;
+}
+.btn-secondary:hover { background: color-mix(in srgb, var(--violet) 55%, transparent); }
+.file-btn { display: inline-block; cursor: pointer; text-align: center; }
+.acc-backup-row { display: flex; gap: .6rem; flex-wrap: wrap; }
+.sync-tip { margin: .3rem 0 0; color: var(--muted); font-size: .8rem; }
+
+/* ===== Roleta da Sorte 67 ===== */
+.wheel-header { text-align: center; margin-bottom: .6rem; }
+.wheel-container {
+  position: relative;
+  width: min(280px, 75vw);
+  aspect-ratio: 1;
+  margin: 1rem auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.wheel-pointer {
+  position: absolute;
+  top: -14px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 1.8rem;
+  color: var(--aura);
+  z-index: 5;
+  filter: drop-shadow(0 2px 5px rgba(0,0,0,0.9));
+  pointer-events: none;
+}
+.wheel-disc {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  border: 4px solid var(--aura);
+  box-shadow: 0 0 25px color-mix(in srgb, var(--aura) 45%, transparent);
+  overflow: hidden;
+  transition: transform 4s cubic-bezier(0.12, 0.95, 0.22, 1);
+  will-change: transform;
+}
+.wheel-svg { width: 100%; height: 100%; display: block; }
+.wheel-spin-button {
+  position: absolute;
+  z-index: 4;
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #fff, var(--aura));
+  color: var(--night);
+  border: 3px solid #fff;
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 1rem;
+  cursor: pointer;
+  box-shadow: 0 0 16px rgba(0,0,0,0.9);
+  transition: transform .1s, filter .1s;
+}
+.wheel-spin-button:hover { transform: scale(1.06); filter: brightness(1.15); }
+.wheel-spin-button:active { transform: scale(0.95); }
+.wheel-spin-button:disabled { filter: grayscale(1); opacity: .7; cursor: not-allowed; }
+.wheel-result {
+  min-height: 38px;
+  padding: .5rem;
+  margin: .4rem auto;
+  font-weight: 700;
+  color: var(--aura);
+  text-align: center;
+  font-size: 1.1rem;
+}
+.wheel-tip { text-align: center; color: var(--muted); margin-top: .4rem; }
+
+/* ===== Barra de Progresso nas Conquistas ===== */
+.ach-prog {
+  display: block;
+  position: relative;
+  height: 14px;
+  background: color-mix(in srgb, var(--ink) 12%, transparent);
+  border-radius: 999px;
+  margin-top: .3rem;
+  overflow: hidden;
+}
+.ach-prog > i {
+  display: block;
+  height: 100%;
+  background: var(--aura);
+  border-radius: 999px;
+  transition: width .3s ease;
+}
+.ach-prog > span {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: .68rem;
+  font-family: var(--mono);
+  color: #fff;
+  text-shadow: 0 1px 2px #000;
+}
+
+/* ===== Estatísticas ===== */
+.stats-head { text-align: center; margin-bottom: .6rem; }
+.stats-head h3 { margin: 0 0 .2rem; color: var(--aura); font-size: 1.2rem; }
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: .6rem;
+  margin-top: .8rem;
+}
+.stat-card {
+  background: color-mix(in srgb, var(--violet) 18%, var(--night));
+  border: 1px solid color-mix(in srgb, var(--violet) 30%, transparent);
+  border-radius: 6px;
+  padding: .7rem .6rem;
+  text-align: center;
+}
+.stat-card b {
+  display: block;
+  font-family: var(--mono);
+  font-size: 1.35rem;
+  color: var(--aura);
+  margin-bottom: .2rem;
+}
+.stat-card small {
+  font-size: .75rem;
+  color: var(--muted);
+  line-height: 1.2;
+}
+
+/* ===== Guia Vivo do Jogo ===== */
+.guide-box { text-align: left; }
+.guide-box h3 { margin: 0 0 .8rem; color: var(--aura); text-align: center; }
+.guide-box details {
+  background: color-mix(in srgb, var(--dusk) 50%, var(--night));
+  border: 1px solid color-mix(in srgb, var(--violet) 25%, transparent);
+  border-radius: 6px;
+  padding: .6rem .8rem;
+  margin-bottom: .6rem;
+}
+.guide-box summary {
+  font-weight: 700;
+  color: var(--aura);
+  cursor: pointer;
+  user-select: none;
+}
+.guide-box details[open] summary { margin-bottom: .5rem; }
+.guide-box p {
+  margin: 0;
+  color: var(--ink);
+  font-size: .88rem;
+  line-height: 1.5;
+}
+

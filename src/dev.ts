@@ -47,8 +47,8 @@ export function mountDev(h: DevHooks) {
     <div class="dev-row"><button data-a="aura">+aura ×10</button><button data-a="shop">completar loja</button></div>
     <div class="dev-row"><button data-a="golden">🧠 cérebro</button><button data-a="thief">🦹 ladrão</button></div>
     <div class="dev-row"><button data-a="tokens">+50 fichas</button><button data-a="cosmetics">todos enfeites</button></div>
-    <div class="dev-row"><button data-a="day">+1 dia</button><button data-a="max">nível máx</button></div>
-    <button data-a="zero">zerar tudo</button>
+    <div class="dev-row"><button data-a="day">+1 dia</button><button data-a="spins">🎰 +5 giros</button></div>
+    <div class="dev-row"><button data-a="max">nível máx</button><button data-a="zero">zerar tudo</button></div>
   `;
   document.body.append(btn, panel);
   btn.addEventListener("click", () => panel.classList.toggle("open"));
@@ -90,6 +90,13 @@ export function mountDev(h: DevHooks) {
     },
     tokens: () => { h.state().tokens += 50; h.render(); },
     cosmetics: () => { const s = h.state(); s.owned = COSMETICS.map(c => c.id); h.render(); },
+    spins: () => {
+      void import("./wheel").then(w => {
+        for (let i = 0; i < 5; i++) w.addSpin();
+        h.render();
+        h.toast("🎰 +5 giros adicionados à Roleta!");
+      });
+    },
     // finge que o último login foi ontem: o próximo tick dá a recompensa do dia e soma na sequência
     day: () => {
       const s = h.state();
@@ -98,6 +105,7 @@ export function mountDev(h: DevHooks) {
     },
     max: () => goTo(RANKS.length - 1),
     zero: () => {
+
       const s = h.state();
       s.aura = s.total = s.lifetime = s.tokens = s.prestige = 0;
       s.clicks = s.crits = s.goldens = s.thieves = s.streak = 0;

@@ -1,0 +1,19 @@
+{
+  "name": "Clawd Aura Farm",
+  "short_name": "Clawd Aura",
+  "description": "Clicker em que o Clawd faz o six seven enquanto você farma aura",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#140f24",
+  "theme_color": "#140f24",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

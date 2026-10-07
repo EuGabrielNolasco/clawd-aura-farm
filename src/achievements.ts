@@ -39,3 +39,60 @@ export function checkAchievements(s: State, level: number, shopFull: boolean): A
   }
   return fresh;
 }
+
+export interface ProgressInfo {
+  current: number;
+  target: number;
+  label: string;
+  pct: number;
+}
+
+/** Calcula o progresso visual de uma conquista para a barra de progresso. */
+export function achievementProgress(a: Achievement, s: State, level: number, shopFull: boolean): ProgressInfo {
+  const done = s.achievements.includes(a.id) || a.done(s, level, shopFull);
+  let current = 0;
+  let target = 1;
+  let label = "";
+
+  switch (a.id) {
+    case "clicks_67":
+      current = s.clicks; target = 67; label = `${Math.min(current, target)} / 67 cliques`; break;
+    case "clicks_6767":
+      current = s.clicks; target = 6767; label = `${Math.min(current, target).toLocaleString("pt-BR")} / 6.767 cliques`; break;
+    case "clicks_67k":
+      current = s.clicks; target = 67000; label = `${Math.min(current, target).toLocaleString("pt-BR")} / 67.000 cliques`; break;
+    case "crit_1":
+      current = s.crits; target = 1; label = `${Math.min(current, target)} / 1 crítico`; break;
+    case "crit_100":
+      current = s.crits; target = 100; label = `${Math.min(current, target)} / 100 críticos`; break;
+    case "lvl_sigma":
+      current = level; target = 6; label = `Nível ${Math.min(current, target)} / 6`; break;
+    case "lvl_megabrain":
+      current = level; target = 7; label = `Nível ${Math.min(current, target)} / 7`; break;
+    case "lvl_max":
+      current = level; target = 15; label = `Nível ${Math.min(current, target)} / 15`; break;
+    case "shop_full":
+      current = Object.values(s.upgrades).reduce((acc, v) => acc + v, 0);
+      target = 40 + 30 + 10 + 30 + 30 + 5; // 145 upgrades no total
+      label = `${current} / ${target} itens`;
+      break;
+    case "golden_1":
+      current = s.goldens; target = 1; label = `${Math.min(current, target)} / 1 cérebro`; break;
+    case "golden_10":
+      current = s.goldens; target = 10; label = `${Math.min(current, target)} / 10 cérebros`; break;
+    case "thief_5":
+      current = s.thieves; target = 5; label = `${Math.min(current, target)} / 5 ladrões`; break;
+    case "streak_3":
+      current = s.streak; target = 3; label = `${Math.min(current, target)} / 3 dias`; break;
+    case "streak_7":
+      current = s.streak; target = 7; label = `${Math.min(current, target)} / 7 dias`; break;
+    case "prestige_1":
+      current = s.prestige; target = 1; label = `${Math.min(current, target)} / 1 renascimento`; break;
+    default:
+      current = done ? 1 : 0; target = 1; label = done ? "Completo" : "Em andamento";
+  }
+
+  const pct = done ? 100 : Math.min(100, Math.max(0, Math.floor((current / target) * 100)));
+  return { current, target, label, pct };
+}
+

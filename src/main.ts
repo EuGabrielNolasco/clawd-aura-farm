@@ -1,5 +1,5 @@
 import "./style.css";
-import { ACHIEVEMENTS, checkAchievements } from "./achievements";
+import { ACHIEVEMENTS, achievementProgress, checkAchievements } from "./achievements";
 import { COSMETICS, cosmeticById, SLOTS, type Slot } from "./cosmetics";
 import {
   allMaxed, applyEvent, buffActive, canBuy, canPrestige, clickGain, comboFor, costOf, daily, EV,
@@ -8,9 +8,14 @@ import {
 } from "./game";
 import { createFx, reduceMotion } from "./fx";
 import { clawdSvg } from "./mini";
-import { createSync, onlineEnabled, toState, type RankRow, type ServerState } from "./online";
+import { createSync, fetchPlayerState, onlineEnabled, toState, type RankRow, type ServerState } from "./online";
+import { generateQrSvg } from "./qr";
 import { sfx, setMuted } from "./sound";
-import { load, loadMuted, player, sanitize, save, saveMuted } from "./storage";
+import {
+  accountShareUrl, exportAccountToken, exportSaveJson, importSaveJson,
+  load, loadMuted, parseAccountToken, player, sanitize, save, saveMuted, savePlayer, type Player,
+} from "./storage";
+import { addSpin, loadSpins, renderWheelSvg, spinWheel } from "./wheel";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const stage = $("stage"), mascot = $("mascot");
@@ -18,6 +23,11 @@ const stage = $("stage"), mascot = $("mascot");
 const saved = load();
 let state: State = saved.state;
 let level = -1;
+let activePlayer: Player = player();
+let spinsState = loadSpins(todayBR());
+let wheelRot = 0;
+let isSpinning = false;
+
 const fx = createFx($<HTMLCanvasElement>("fx"), mascot, $("flash"), () => level);
 
 const fmt = (n: number) => Math.floor(n).toLocaleString("pt-BR");
@@ -64,10 +74,13 @@ let lastRank: number | null = null;
 let lastAhead: ServerState["ahead"] = null;
 let myName: string | null = null;
 
-const sync = onlineEnabled ? createSync(player(), onServer, ok => {
+const sync = onlineEnabled ? createSync(activePlayer, onServer, ok => {
   $("net").textContent = ok ? "Conectado: sua aura conta no ranking." : "Sem conexão. Seu progresso é enviado quando a conexão voltar.";
+  const st = $("acc-status");
+  if (st) st.textContent = ok ? "🟢 Conectado na Nuvem" : "🟡 Sem conexão com o servidor";
 }) : null;
 let firstSync = true;
+
 
 function onServer(r: ServerState, pending: string) {
   clockOffset = r.now - nowSec();
@@ -99,9 +112,23 @@ function welcomeBack(seconds: number, gained: number) {
   sfx.welcome();
 }
 
+function updateWheelBadge() {
+  const b = $("wheel-badge");
+  if (b) {
+    b.hidden = spinsState.spins <= 0;
+    b.textContent = String(spinsState.spins);
+  }
+  const val = $("wheel-spins-val");
+  if (val) val.textContent = String(spinsState.spins);
+  const btn = $("wheel-spin-btn") as HTMLButtonElement | null;
+  if (btn) btn.disabled = spinsState.spins <= 0 || isSpinning;
+}
+
 function dailyReward(tokens: number, streak: number) {
   toast(`🔥 Sequência de ${streak} ${streak === 1 ? "dia" : "dias"}! +${tokens} Fichas 67 pelo login de hoje.`);
   sfx.daily();
+  spinsState.spins = addSpin();
+  updateWheelBadge();
 }
 
 function achievementUnlocked(id: string) {
@@ -124,6 +151,10 @@ for (const g of $("clones").querySelectorAll("[id]")) g.removeAttribute("id");
 
 $("ladder").innerHTML = RANKS.map(([, n]) => `<span>${n}</span>`).join("");
 const ladderEls = [...$("ladder").children] as HTMLElement[];
+
+const wheelSlices = $("wheel-slices");
+if (wheelSlices) wheelSlices.innerHTML = renderWheelSvg();
+updateWheelBadge();
 
 const shopItems = UPGRADES.map(u => {
   const btn = document.createElement("button");
@@ -154,7 +185,11 @@ function levelUp(l: number) {
   const r = mascot.getBoundingClientRect();
   fx.burst(r.left + r.width / 2, r.top + r.height / 2, null, 20 + l * 3);
   replay($("star"), "nudge");
+  spinsState.spins = addSpin();
+  updateWheelBadge();
+  toast(`🎰 Nível ${RANKS[l][1]}! +1 giro grátis na Roleta da Sorte.`);
 }
+
 
 // ===== enfeites no Clawd =====
 let appliedLook = "";
@@ -207,6 +242,7 @@ $("golden").addEventListener("click", () => {
   $("golden").hidden = true;
   if (buffActive(state, now())) {
     sfx.megaBrain();
+    if ("vibrate" in navigator) navigator.vibrate([40, 50, 40]);
     const b = $("banner");
     b.innerHTML = `<small>JARVIS, ATIVAR</small>MEGA BRAIN`;
     replay(b, "show");
@@ -222,7 +258,10 @@ $("thief").addEventListener("click", () => {
   $("thief").hidden = true;
   if (state.tokens > before) {
     sfx.thiefCaught();
-    toast(`🦹 Pegou o ladrão! +${THIEF.tokens} Fichas 67.`);
+    if ("vibrate" in navigator) navigator.vibrate([40, 50, 40]);
+    spinsState.spins = addSpin();
+    updateWheelBadge();
+    toast(`🦹 Pegou o ladrão! +${THIEF.tokens} Fichas 67 e +1 giro na Roleta!`);
   }
   render();
 });
@@ -264,6 +303,10 @@ function render() {
   $("combo-text").textContent = `COMBO ×${c.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}`;
   $("combo").classList.toggle("hot", c >= 2);
 
+  const currentCps = clickTimes.length / 2;
+  const cpsEl = $("cps-text");
+  if (cpsEl) cpsEl.textContent = `${currentCps.toFixed(1)} CPS`;
+
   for (const it of shopItems) {
     const n = state.upgrades[it.u.id];
     it.owned.textContent = `${n}/${it.u.max}`;
@@ -273,6 +316,7 @@ function render() {
   }
   applyCosmetics();
   updateEvents();
+  updateWheelBadge();
   if (menu.open) renderMenu();
   if (!sync) save(state);
 }
@@ -284,10 +328,17 @@ function farm(ev?: MouseEvent) {
   const x = ev?.clientX || rect.left + rect.width / 2;
   const y = ev?.clientY || rect.top + rect.height / 3;
   fx.burst(x, y, "+" + fmtShort(r.gain) + (r.crit ? " CRÍTICO" : ""), level >= LV.auraInfinita ? 24 : 14);
-  if (r.crit) sfx.crit(); else sfx.click(combo());
+  if (r.crit) {
+    sfx.crit();
+    if ("vibrate" in navigator) navigator.vibrate(25);
+  } else {
+    sfx.click(combo());
+    if ("vibrate" in navigator) navigator.vibrate(10);
+  }
   if (level >= LV.deus && !reduceMotion) replay(stage, "shake");
   render();
 }
+
 
 // ===== modo local: o navegador faz o papel do servidor =====
 function localTick() {
@@ -346,7 +397,7 @@ function applyMute() {
 $("mute").addEventListener("click", () => { muted = !muted; saveMuted(muted); applyMute(); });
 applyMute();
 
-// ===== menu: ranking, conquistas e enfeites =====
+// ===== menu: conta, roleta, ranking, conquistas, enfeites, stats e guia =====
 const menu = $<HTMLDialogElement>("menu");
 let tab = "ach";
 let list: "around" | "top" = "around";
@@ -365,23 +416,88 @@ $("menu-close").addEventListener("click", () => menu.close());
 
 let renderedMenu = "";
 function renderMenu() {
-  for (const b of document.querySelectorAll<HTMLElement>(".tabs [data-tab]")) b.setAttribute("aria-selected", String(b.dataset.tab === tab));
-  for (const p of document.querySelectorAll<HTMLElement>("[data-panel]")) p.hidden = p.dataset.panel !== tab;
+  for (const b of document.querySelectorAll<HTMLElement>(".tabs [data-tab]")) {
+    b.setAttribute("aria-selected", String(b.dataset.tab === tab));
+  }
+  for (const p of document.querySelectorAll<HTMLElement>("[data-panel]")) {
+    p.hidden = p.dataset.panel !== tab;
+  }
   // só redesenha quando algo que aparece no menu mudou
-  const key = JSON.stringify([tab, state.tokens, state.achievements, state.owned, state.equipped]);
+  const key = JSON.stringify([tab, state.tokens, state.achievements, state.owned, state.equipped, spinsState.spins, activePlayer.id]);
   if (key === renderedMenu) return;
   renderedMenu = key;
+  if (tab === "account") renderAccount();
+  if (tab === "wheel") updateWheelBadge();
   if (tab === "ach") renderAchievements();
   if (tab === "cos") renderCosmetics();
+  if (tab === "stats") renderStats();
+}
+
+function renderAccount() {
+  $("acc-avatar").innerHTML = clawdSvg(state.equipped);
+  $("acc-name").textContent = myName || "Jogador Anônimo";
+  $("acc-status").textContent = sync ? "🟢 Sincronizado na Nuvem" : "🟡 Modo Local (Offline)";
+  $("acc-id-short").textContent = `ID: ...${activePlayer.id.slice(-6)}`;
+  $("acc-rank-label").textContent = lastRank ? `#${lastRank} no ranking` : "Sem apelido no ranking";
+
+  const shareUrl = accountShareUrl(activePlayer);
+  const qrContainer = $("acc-qr");
+  if (qrContainer) {
+    qrContainer.innerHTML = generateQrSvg(shareUrl);
+  }
+}
+
+function renderStats() {
+  const grid = $("stats-grid");
+  if (!grid) return;
+  const lvl = levelOf(state.total);
+  const multVal = LEVEL_BONUS ** lvl * 2 ** state.upgrades.cosmic * (1 + PRESTIGE_BONUS * state.prestige);
+  const critPct = state.clicks > 0 ? ((state.crits / state.clicks) * 100).toFixed(1) : "0.0";
+  const totalBought = Object.values(state.upgrades).reduce((a, b) => a + b, 0);
+
+  const stats = [
+    { label: "Aura Atual", val: fmtShort(state.aura) },
+    { label: "Aura Vitalícia", val: fmtShort(state.lifetime) },
+    { label: "Nível Atual", val: `${lvl} (${RANKS[lvl][1]})` },
+    { label: "Multiplicador Total", val: `×${multVal.toFixed(2)}` },
+    { label: "Prestígio", val: `⭐ ×${state.prestige}` },
+    { label: "Cliques Totais", val: state.clicks.toLocaleString("pt-BR") },
+    { label: "Críticos Desferidos", val: state.crits.toLocaleString("pt-BR") },
+    { label: "Taxa Real de Crítico", val: `${critPct}%` },
+    { label: "Cérebros Dourados", val: String(state.goldens) },
+    { label: "Ladrões Capturados", val: String(state.thieves) },
+    { label: "Sequência de Dias", val: `${state.streak} dias` },
+    { label: "Fichas 67 Disponíveis", val: String(state.tokens) },
+    { label: "Upgrades Comprados", val: `${totalBought}/145` },
+    { label: "Conquistas Concluídas", val: `${state.achievements.length}/${ACHIEVEMENTS.length}` },
+    { label: "Enfeites Possuídos", val: `${state.owned.length}/${COSMETICS.length}` },
+    { label: "Sincronização", val: onlineEnabled ? "🟢 Supabase" : "🟡 Local" },
+  ];
+
+  grid.replaceChildren(...stats.map(s => {
+    const div = document.createElement("div");
+    div.className = "stat-card";
+    div.innerHTML = `<b>${s.val}</b><small>${s.label}</small>`;
+    return div;
+  }));
 }
 
 function renderAchievements() {
   $("ach-summary").textContent = `${state.achievements.length} de ${ACHIEVEMENTS.length} conquistas · cada uma dá Fichas 67.`;
   $("ach-list").replaceChildren(...ACHIEVEMENTS.map(a => {
     const done = state.achievements.includes(a.id);
+    const prog = achievementProgress(a, state, levelOf(state.total), allMaxed(state));
     const li = document.createElement("li");
     li.className = done ? "done" : "";
-    li.innerHTML = `<span class="medal">${done ? "🎖" : "🔒"}</span><span><b></b><small></small></span><em></em>`;
+    li.innerHTML = `
+      <span class="medal">${done ? "🎖" : "🔒"}</span>
+      <span>
+        <b></b>
+        <small></small>
+        <div class="ach-prog"><i style="width: ${prog.pct}%"></i><span>${prog.label}</span></div>
+      </span>
+      <em></em>
+    `;
     li.querySelector("b")!.textContent = a.name;
     li.querySelector("small")!.textContent = a.desc;
     li.querySelector("em")!.textContent = `+${a.reward} 🎟`;
@@ -433,9 +549,8 @@ function rankRow(e: RankRow) {
   pos.className = "pos";
   pos.textContent = `#${e.rank}`;
   pic.className = "pic";
-  // enfeites de outro jogador: valida contra o catálogo antes de desenhar
   pic.innerHTML = clawdSvg(sanitize({ owned: Object.values(e.equipped ?? {}), equipped: e.equipped }).equipped);
-  name.textContent = e.name + (e.prestige ? ` ⭐${e.prestige}` : ""); // textContent: apelidos nunca viram HTML
+  name.textContent = e.name + (e.prestige ? ` ⭐${e.prestige}` : "");
   aura.textContent = fmtShort(e.lifetime);
   li.append(pos, pic, name, aura);
   return li;
@@ -461,6 +576,159 @@ async function loadRanking() {
 for (const b of document.querySelectorAll<HTMLElement>(".subtabs [data-list]")) {
   b.addEventListener("click", () => { list = b.dataset.list as typeof list; void loadRanking(); });
 }
+
+// ===== eventos da conta & sincronização =====
+$("copy-sync-link")?.addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText(accountShareUrl(activePlayer));
+    sfx.copy();
+    toast("📋 Link de acesso direto copiado! Abra no outro dispositivo.");
+  } catch {
+    toast("Link: " + accountShareUrl(activePlayer));
+  }
+});
+
+$("copy-sync-token")?.addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText(exportAccountToken(activePlayer));
+    sfx.copy();
+    toast("🔑 Chave da conta copiada!");
+  } catch {
+    toast("Chave: " + exportAccountToken(activePlayer));
+  }
+});
+
+$<HTMLFormElement>("import-account-form")?.addEventListener("submit", async e => {
+  e.preventDefault();
+  const input = $<HTMLInputElement>("import-account-input");
+  const msg = $("import-account-msg");
+  const val = input.value.trim();
+  const targetPlayer = parseAccountToken(val);
+  if (!targetPlayer) {
+    msg.textContent = "Chave ou link inválido. Verifique o código e tente novamente.";
+    return;
+  }
+  msg.textContent = "Conectando à conta…";
+  try {
+    if (onlineEnabled) {
+      const serverData = await fetchPlayerState(targetPlayer);
+      activePlayer = targetPlayer;
+      savePlayer(activePlayer);
+      sync?.setPlayer(activePlayer);
+      onServer(serverData, "");
+      msg.textContent = "Conta conectada com sucesso!";
+      toast("🎉 Conectado com sucesso na sua conta!");
+      input.value = "";
+      renderAccount();
+    } else {
+      activePlayer = targetPlayer;
+      savePlayer(activePlayer);
+      msg.textContent = "Conta salva localmente!";
+      toast("Conta salva localmente!");
+      renderAccount();
+    }
+  } catch (err) {
+    msg.textContent = "Erro ao conectar: " + (err as Error).message;
+  }
+});
+
+$("btn-export-json")?.addEventListener("click", () => {
+  const json = exportSaveJson(state, activePlayer);
+  const blob = new Blob([json], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `clawd-aura-save-${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  sfx.copy();
+  toast("💾 Backup salvo com sucesso!");
+});
+
+$<HTMLInputElement>("input-import-json")?.addEventListener("change", async e => {
+  const file = (e.target as HTMLInputElement).files?.[0];
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const res = importSaveJson(text);
+    if (!res) throw new Error("Arquivo de backup inválido.");
+    state = res.state;
+    save(state);
+    if (res.player) {
+      activePlayer = res.player;
+      savePlayer(activePlayer);
+      sync?.setPlayer(activePlayer);
+    }
+    sfx.welcome();
+    toast("📂 Backup restaurado com sucesso!");
+    render();
+  } catch (err) {
+    toast("Falha ao restaurar: " + (err as Error).message);
+  }
+});
+
+// ===== eventos da roleta da sorte 67 =====
+$("wheel-spin-btn")?.addEventListener("click", () => {
+  if (isSpinning || spinsState.spins <= 0) return;
+  isSpinning = true;
+  const res = spinWheel(state, now(), wheelRot);
+  if (!res) { isSpinning = false; return; }
+
+  wheelRot = res.degrees;
+  spinsState.spins = res.remainingSpins;
+  updateWheelBadge();
+
+  const disc = $("wheel-disc");
+  if (disc) disc.style.transform = `rotate(${wheelRot}deg)`;
+
+  const tickInterval = setInterval(() => { sfx.wheelTick(); }, 160);
+
+  setTimeout(() => {
+    clearInterval(tickInterval);
+    isSpinning = false;
+    sfx.wheelWin();
+    $("wheel-result").textContent = `🎉 ${res.message}`;
+    toast(`🎰 Roleta: ${res.message}`);
+    const r = $("wheel-disc").getBoundingClientRect();
+    fx.burst(r.left + r.width / 2, r.top + r.height / 2, null, 25);
+    updateWheelBadge();
+    render();
+  }, 4000);
+});
+
+// ===== verificação de conta recebida por link (#sync=... ou ?sync=...) =====
+async function checkUrlAccount() {
+  try {
+    const url = new URL(window.location.href);
+    const syncToken = url.searchParams.get("sync") || (url.hash.startsWith("#sync=") ? url.hash.slice(6) : null);
+    if (!syncToken) return;
+
+    const imported = parseAccountToken(syncToken);
+    if (imported && imported.id !== activePlayer.id) {
+      const confirmSwitch = state.lifetime === 0 || confirm("Encontramos uma chave de conta no link. Deseja sincronizar e entrar nesta conta?");
+      if (confirmSwitch) {
+        activePlayer = imported;
+        savePlayer(activePlayer);
+        sync?.setPlayer(activePlayer);
+        if (onlineEnabled) {
+          try {
+            const sState = await fetchPlayerState(activePlayer);
+            onServer(sState, "");
+            toast("🎉 Conta conectada com sucesso via link!");
+          } catch (e) {
+            toast("Erro ao sincronizar link: " + (e as Error).message);
+          }
+        } else {
+          toast("Conta carregada!");
+        }
+      }
+    }
+    // limpa o token da URL para não poluir o histórico nem expor a chave
+    history.replaceState(null, "", window.location.origin + window.location.pathname);
+  } catch {
+    //
+  }
+}
+void checkUrlAccount();
 
 if (sync) {
   $("ranking-open").hidden = false;
@@ -500,3 +768,4 @@ if (import.meta.env.DEV) {
     pauseSync: sync ? () => sync.pause() : null,
   }));
 }
+
