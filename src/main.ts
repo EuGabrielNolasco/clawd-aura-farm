@@ -363,13 +363,8 @@ $("farm").addEventListener("click", farm);
 mascot.addEventListener("click", farm);
 mascot.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); farm(); } });
 
-$("reset").addEventListener("click", () => {
-  if (!confirm("Zerar a aura e os upgrades desta vida? Fichas, enfeites, conquistas e o ranking continuam. Não dá para desfazer.")) return;
-  act(EV.reset);
-  render();
-});
-
 $("prestige").addEventListener("click", () => {
+
   if (!confirm(`Renascer? Você volta para NPC sem upgrades, mas ganha +25% de aura para sempre (fica ⭐×${state.prestige + 1}). Fichas, enfeites e ranking continuam.`)) return;
   act(EV.prestige);
   sfx.prestige();
