@@ -84,8 +84,17 @@ let firstSync = true;
 
 function onServer(r: ServerState, pending: string) {
   clockOffset = r.now - nowSec();
+  const prevOwned = state.owned;
+  const prevEquipped = { ...state.equipped };
   state = toState(r);
+  for (const id of prevOwned) {
+    if (!state.owned.includes(id)) state.owned.push(id);
+  }
+  for (const [slot, id] of Object.entries(prevEquipped) as [Slot, string][]) {
+    if (id && state.owned.includes(id) && !state.equipped[slot]) state.equipped[slot] = id;
+  }
   for (const [c, a] of parseEvents(pending)) applyEvent(state, c, a, combo(), now());
+  save(state);
   if (firstSync && r.offline >= 60) welcomeBack(r.offline, r.offline_gain);
   if (r.daily > 0) dailyReward(r.daily, state.streak);
   for (const id of r.new_achievements ?? []) achievementUnlocked(id);
@@ -98,9 +107,11 @@ function onServer(r: ServerState, pending: string) {
   }
   lastRank = r.rank;
   lastAhead = r.ahead;
+  const myLvl = levelOf(state.lifetime);
+  const myStars = myLvl + 1 + state.prestige * 5;
   $("my-rank").textContent = r.name
-    ? `Você é ${r.name}, em #${r.rank} com ${fmtShort(state.lifetime)} de aura vitalícia.`
-    : "Escolha um apelido para aparecer no ranking.";
+    ? `Você é ${r.name} · #${r.rank} · Rank ${RANKS[myLvl][1]} (⭐${myStars}) · ${fmtShort(state.lifetime)} de aura`
+    : "Escolha um apelido abaixo para aparecer no ranking com seu Rank e suas Estrelas!";
   if (r.name && !$<HTMLInputElement>("name").value) $<HTMLInputElement>("name").value = r.name;
   render();
 }
@@ -395,7 +406,7 @@ applyMute();
 // ===== menu: conta, roleta, ranking, conquistas, enfeites, stats e guia =====
 const menu = $<HTMLDialogElement>("menu");
 let tab = "ach";
-let list: "around" | "top" = "around";
+let list: "around" | "top" = "top";
 
 function openMenu(t: string) {
   tab = t;
@@ -539,30 +550,93 @@ function renderCosmetics() {
 
 function rankRow(e: RankRow) {
   const li = document.createElement("li");
-  if (e.me) li.className = "me";
-  const pos = document.createElement("span"), pic = document.createElement("span"), name = document.createElement("span"), aura = document.createElement("b");
+  const isMe = Boolean(e.me || (myName && e.name.toLowerCase() === myName.toLowerCase()));
+  if (isMe) li.className = "me";
+
+  const lvl = levelOf(e.lifetime);
+  const rankTitle = RANKS[lvl][1];
+  const totalStars = lvl + 1 + (e.prestige || 0) * 5;
+  const tierStars = "⭐".repeat(Math.min(5, Math.max(1, Math.ceil((lvl + 1) / 3))));
+
+  const pos = document.createElement("span");
   pos.className = "pos";
   pos.textContent = `#${e.rank}`;
+
+  const pic = document.createElement("span");
   pic.className = "pic";
   pic.innerHTML = clawdSvg(sanitize({ owned: Object.values(e.equipped ?? {}), equipped: e.equipped }).equipped);
-  name.textContent = e.name + (e.prestige ? ` ⭐${e.prestige}` : "");
+
+  const info = document.createElement("div");
+  info.className = "rank-info";
+
+  const topLine = document.createElement("div");
+  topLine.className = "rank-line";
+  const nameEl = document.createElement("span");
+  nameEl.className = "rank-name";
+  nameEl.textContent = e.name;
+
+  const starsEl = document.createElement("span");
+  starsEl.className = "rank-stars";
+  starsEl.title = `${totalStars} estrelas (${rankTitle}${e.prestige ? ` · ${e.prestige} renascimento(s)` : ""})`;
+  starsEl.textContent = `${tierStars} ${totalStars}⭐` + (e.prestige ? ` · 🌟×${e.prestige}` : "");
+  topLine.append(nameEl, starsEl);
+
+  const subLine = document.createElement("div");
+  subLine.className = "rank-sub";
+  const badge = document.createElement("span");
+  badge.className = `rank-badge lv-${lvl}`;
+  badge.textContent = `Nv.${lvl + 1} · ${rankTitle}`;
+  subLine.append(badge);
+
+  info.append(topLine, subLine);
+
+  const aura = document.createElement("b");
+  aura.className = "rank-aura";
   aura.textContent = fmtShort(e.lifetime);
-  li.append(pos, pic, name, aura);
+
+  li.append(pos, pic, info, aura);
   return li;
+}
+
+function renderRankDistribution(rows: RankRow[]) {
+  const box = $("rank-distribution");
+  if (!box) return;
+  if (!rows.length) {
+    box.hidden = true;
+    return;
+  }
+  const counts = new Map<number, number>();
+  for (const r of rows) {
+    const l = levelOf(r.lifetime);
+    counts.set(l, (counts.get(l) ?? 0) + 1);
+  }
+  const sortedLevels = [...counts.entries()].sort((a, b) => b[0] - a[0]);
+  box.hidden = false;
+  box.innerHTML = `<small class="dist-title">📊 Onde a galera está (${rows.length} jogadores):</small><div class="dist-chips"></div>`;
+  const chips = box.querySelector(".dist-chips")!;
+  for (const [lvl, count] of sortedLevels) {
+    const chip = document.createElement("span");
+    chip.className = "dist-chip";
+    chip.textContent = `${RANKS[lvl][1]}: ${count}`;
+    chips.append(chip);
+  }
 }
 
 async function loadRanking() {
   const ol = $("top");
+  const dist = $("rank-distribution");
+  if (dist) dist.hidden = true;
   for (const b of document.querySelectorAll<HTMLElement>(".subtabs [data-list]")) b.classList.toggle("on", b.dataset.list === list);
   ol.replaceChildren(Object.assign(document.createElement("li"), { textContent: "Carregando…" }));
   try {
     const rows = list === "top" ? await sync!.top() : await sync!.around();
     if (!rows.length) {
       ol.replaceChildren(Object.assign(document.createElement("li"), {
-        textContent: list === "around" ? "Escolha um apelido para ver quem está perto de você." : "Ninguém ainda. Seja o primeiro!",
+        textContent: list === "around" ? "Escolha um apelido acima para ver quem está perto de você, ou veja a aba Todos!" : "Ninguém ainda. Seja o primeiro!",
       }));
       return;
     }
+    renderRankDistribution(rows);
     ol.replaceChildren(...rows.map(rankRow));
   } catch {
     ol.replaceChildren(Object.assign(document.createElement("li"), { textContent: "Não foi possível carregar o ranking." }));

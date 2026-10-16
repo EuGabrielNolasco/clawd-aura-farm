@@ -99,7 +99,7 @@ export function createSync(initialPlayer: Player, onSync: (r: ServerState, pendi
     getPlayer: () => p,
     setPlayer(newP: Player) { p = newP; queue = ""; },
     setName: (name: string) => rpc<void>("aura_set_name", { p_id: p.id, p_secret: p.secret, p_name: name }),
-    top: () => rpc<RankRow[]>("aura_top", { p_limit: 10 }),
+    top: () => rpc<RankRow[]>("aura_top", { p_limit: 50 }),
     around: () => rpc<RankRow[]>("aura_around", { p_id: p.id, p_secret: p.secret }),
   };
 }

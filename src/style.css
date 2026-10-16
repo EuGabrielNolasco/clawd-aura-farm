@@ -320,7 +320,9 @@ button:focus-visible { outline: 3px solid var(--ink); outline-offset: 4px; }
 .bg-favela { background: radial-gradient(circle, #ff4fd8aa 1.5px, transparent 2.5px) 0 0 / 26px 20px, radial-gradient(circle, #00e5ff88 1.5px, transparent 2.5px) 13px 10px / 26px 20px, linear-gradient(#12082a, #2a0f45 52%, #ff4fd8 57%, #1d0b36 59%, #0d0620) !important; }
 .bg-praia { background: linear-gradient(#ffb36b, #ff7e8a 45%, #1fb5c9 45% 62%, #f4d58d 62%) !important; }
 .bg-server { background: radial-gradient(circle, #39ff88 1.2px, transparent 2px) 10px 8px / 64px 14px, repeating-linear-gradient(90deg, #142238 0 56px, #0a1322 56px 64px), linear-gradient(#0d1a2e, #060c16) !important; }
+.bg-cyber { background: repeating-linear-gradient(0deg, #ff2a6d22 0 1px, transparent 1px 16px), repeating-linear-gradient(90deg, #00e5ff22 0 1px, transparent 1px 24px), linear-gradient(#090418, #1f093d 55%, #ff2a6d 58%, #071b2f 60%, #040814) !important; }
 .bg-espaco { background: radial-gradient(circle at 20% 30%, #fff 0 1px, transparent 2px) 0 0 / 60px 60px, radial-gradient(circle at 70% 80%, #fff 0 1px, transparent 2px) 0 0 / 90px 90px, radial-gradient(ellipse at 60% 40%, #3b1d6e, #05030c 70%) !important; }
+.bg-vulcao { background: radial-gradient(circle at 30% 75%, #ffd166aa 1.5px, transparent 3px) 0 0 / 40px 40px, radial-gradient(circle at 75% 65%, #ff4500aa 2px, transparent 4px) 0 0 / 55px 55px, linear-gradient(#1a0505, #450a0a 55%, #dc2626 80%, #f97316) !important; }
 
 /* ===== Menu com abas ===== */
 .menu { width: min(480px, calc(100vw - 32px)); max-height: min(720px, calc(100vh - 32px)); }
@@ -331,11 +333,23 @@ button:focus-visible { outline: 3px solid var(--ink); outline-offset: 4px; }
 .subtabs { display: flex; gap: .3rem; margin-top: 1rem; }
 .subtabs button { flex: 1; font-size: .9rem; padding: .3rem; color: var(--muted); background: transparent; border: 1px solid color-mix(in srgb, var(--violet) 50%, transparent); }
 .subtabs button.on { color: var(--ink); background: color-mix(in srgb, var(--violet) 40%, transparent); }
-.top li { gap: .5rem; align-items: center; }
+.rank-distribution { margin-top: .7rem; padding: .5rem .65rem; background: color-mix(in srgb, var(--dusk) 65%, var(--night)); border: 1px solid color-mix(in srgb, var(--violet) 35%, transparent); border-radius: 6px; }
+.rank-distribution[hidden] { display: none; }
+.dist-title { display: block; font-family: var(--mono); font-size: .95rem; color: var(--muted); margin-bottom: .35rem; }
+.dist-chips { display: flex; flex-wrap: wrap; gap: .3rem; }
+.dist-chip { font-family: var(--mono); font-size: .9rem; padding: .1rem .45rem; background: color-mix(in srgb, var(--violet) 28%, transparent); border: 1px solid color-mix(in srgb, var(--aura) 40%, transparent); color: var(--aura); border-radius: 4px; }
+.top li { gap: .55rem; align-items: center; padding: .45rem .6rem; }
 .top li::before { content: none; }
-.top li .pos { color: var(--clawd); min-width: 3.2ch; }
-.top li .pic { width: 28px; height: 28px; flex: none; }
+.top li .pos { color: var(--clawd); min-width: 3.2ch; flex: none; font-weight: 700; }
+.top li .pic { width: 32px; height: 32px; flex: none; }
 .top li .pic svg { width: 100%; height: 100%; }
+.top li .rank-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: .15rem; }
+.top li .rank-line { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; }
+.top li .rank-name { font-weight: 700; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.top li .rank-stars { font-size: .95rem; color: var(--aura); background: color-mix(in srgb, var(--aura) 16%, transparent); border: 1px solid color-mix(in srgb, var(--aura) 45%, transparent); padding: 0 .35rem; border-radius: 4px; white-space: nowrap; }
+.top li .rank-sub { display: flex; align-items: center; gap: .35rem; }
+.top li .rank-badge { font-size: .9rem; color: #6bffe0; background: color-mix(in srgb, #6bffe0 14%, transparent); border: 1px solid color-mix(in srgb, #6bffe0 35%, transparent); padding: 0 .4rem; border-radius: 4px; white-space: nowrap; }
+.top li .rank-aura { flex: none; font-size: 1.25rem; color: var(--aura); }
 .top li.me { outline: 2px solid var(--aura); background: color-mix(in srgb, var(--aura) 18%, transparent); }
 
 .ach-list { list-style: none; padding: 0; margin: .6rem 0 0; display: grid; gap: .35rem; }
