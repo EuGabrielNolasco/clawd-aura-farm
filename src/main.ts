@@ -108,9 +108,9 @@ function onServer(r: ServerState, pending: string) {
   lastRank = r.rank;
   lastAhead = r.ahead;
   const myLvl = levelOf(state.lifetime);
-  const myStars = myLvl + 1 + state.prestige * 5;
+  const myPrest = state.prestige || 0;
   $("my-rank").textContent = r.name
-    ? `Você é ${r.name} · #${r.rank} · Rank ${RANKS[myLvl][1]} (⭐${myStars}) · ${fmtShort(state.lifetime)} de aura`
+    ? `Você é ${r.name} · #${r.rank} · ${RANKS[myLvl][1]} · ⭐ ${myPrest} · ${fmtShort(state.lifetime)} de aura`
     : "Escolha um apelido abaixo para aparecer no ranking com seu Rank e suas Estrelas!";
   if (r.name && !$<HTMLInputElement>("name").value) $<HTMLInputElement>("name").value = r.name;
   render();
@@ -555,8 +555,7 @@ function rankRow(e: RankRow) {
 
   const lvl = levelOf(e.lifetime);
   const rankTitle = RANKS[lvl][1];
-  const totalStars = lvl + 1 + (e.prestige || 0) * 5;
-  const tierStars = "⭐".repeat(Math.min(5, Math.max(1, Math.ceil((lvl + 1) / 3))));
+  const rebirths = e.prestige || 0;
 
   const pos = document.createElement("span");
   pos.className = "pos";
@@ -577,15 +576,15 @@ function rankRow(e: RankRow) {
 
   const starsEl = document.createElement("span");
   starsEl.className = "rank-stars";
-  starsEl.title = `${totalStars} estrelas (${rankTitle}${e.prestige ? ` · ${e.prestige} renascimento(s)` : ""})`;
-  starsEl.textContent = `${tierStars} ${totalStars}⭐` + (e.prestige ? ` · 🌟×${e.prestige}` : "");
+  starsEl.title = `${rebirths} ${rebirths === 1 ? "renascimento" : "renascimentos"}`;
+  starsEl.textContent = `⭐ ${rebirths}`;
   topLine.append(nameEl, starsEl);
 
   const subLine = document.createElement("div");
   subLine.className = "rank-sub";
   const badge = document.createElement("span");
   badge.className = `rank-badge lv-${lvl}`;
-  badge.textContent = `Nv.${lvl + 1} · ${rankTitle}`;
+  badge.textContent = rankTitle;
   subLine.append(badge);
 
   info.append(topLine, subLine);
