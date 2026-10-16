@@ -846,3 +846,96 @@ button:focus-visible { outline: 3px solid var(--ink); outline-offset: 4px; }
   line-height: 1.5;
 }
 
+/* ===== Sincronização Social (Google, Facebook, Número, Apple ID) ===== */
+.acc-linked {
+  margin: .2rem 0 0;
+  font-size: .82rem;
+  color: var(--aura);
+  font-weight: 700;
+}
+.social-btns {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: .45rem;
+  margin-bottom: .8rem;
+}
+@media (max-width: 480px) {
+  .social-btns {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.social-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .4rem;
+  padding: .55rem .5rem;
+  border-radius: 8px;
+  font-size: .88rem;
+  font-weight: 700;
+  color: var(--ink);
+  background: color-mix(in srgb, var(--dusk) 85%, #000);
+  border: 2px solid color-mix(in srgb, var(--violet) 40%, transparent);
+  transition: transform .1s, border-color .15s, background .15s;
+}
+.social-btn:hover { transform: translateY(-1px); }
+.social-btn.active {
+  border-color: var(--aura);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--aura) 35%, transparent);
+}
+.social-btn.google.active { background: color-mix(in srgb, #ea4335 28%, var(--night)); }
+.social-btn.facebook.active { background: color-mix(in srgb, #1877f2 32%, var(--night)); }
+.social-btn.phone.active { background: color-mix(in srgb, #25d366 28%, var(--night)); }
+.social-btn.apple.active { background: color-mix(in srgb, #ffffff 22%, var(--night)); }
+
+.social-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  font-weight: 700;
+  font-size: .9rem;
+  flex: none;
+}
+.social-btn.google .social-icon { background: #fff; color: #ea4335; }
+.social-btn.facebook .social-icon { background: #1877f2; color: #fff; }
+.social-btn.phone .social-icon { background: #25d366; color: #140f24; }
+.social-btn.apple .social-icon { background: #fff; color: #000; }
+
+.social-form label {
+  display: block;
+  font-size: .8rem;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-top: .55rem;
+  margin-bottom: .25rem;
+}
+.social-form > input {
+  width: 100%;
+  box-sizing: border-box;
+  font: 1.15rem var(--mono);
+  color: var(--ink);
+  background: var(--dusk);
+  border: 1px solid var(--violet);
+  border-radius: 6px;
+  padding: .45rem .65rem;
+}
+.social-form > input:focus-visible { outline: 2px solid var(--aura); }
+.btn-whatsapp {
+  margin-top: .6rem;
+  width: 100%;
+  background: #25d366;
+  color: #0b141a;
+  font-weight: 700;
+  font-size: .9rem;
+  padding: .6rem .9rem;
+  border-radius: 6px;
+  transition: filter .15s, transform .1s;
+}
+.btn-whatsapp:hover { filter: brightness(1.1); transform: translateY(-1px); }
+.btn-whatsapp[hidden] { display: none; }
+
+

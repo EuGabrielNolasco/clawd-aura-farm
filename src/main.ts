@@ -12,8 +12,9 @@ import { createSync, fetchPlayerState, onlineEnabled, toState, type RankRow, typ
 import { generateQrSvg } from "./qr";
 import { sfx, setMuted } from "./sound";
 import {
-  accountShareUrl, exportAccountToken, exportSaveJson, importSaveJson,
-  load, loadMuted, parseAccountToken, player, sanitize, save, saveMuted, savePlayer, type Player,
+  accountShareUrl, derivePlayerFromCredentials, exportAccountToken, exportSaveJson, importSaveJson,
+  load, loadLinkedAccount, loadMuted, normalizeIdentifier, parseAccountToken, player, PROVIDER_LABELS,
+  sanitize, save, saveLinkedAccount, saveMuted, savePlayer, type AuthProvider, type Player,
 } from "./storage";
 import { addSpin, loadSpins, renderWheelSvg, spinWheel } from "./wheel";
 
@@ -487,6 +488,17 @@ function renderAccount() {
   $("acc-id-short").textContent = `ID: ...${activePlayer.id.slice(-6)}`;
   $("acc-rank-label").textContent = lastRank ? `#${lastRank} no ranking` : "Sem apelido no ranking";
 
+  const linked = loadLinkedAccount();
+  const linkedBadge = $("acc-linked-badge");
+  if (linkedBadge) {
+    if (linked) {
+      linkedBadge.hidden = false;
+      linkedBadge.textContent = `🔗 Vinculado a ${PROVIDER_LABELS[linked.provider]}: ${linked.identifier}`;
+    } else {
+      linkedBadge.hidden = true;
+    }
+  }
+
   const shareUrl = accountShareUrl(activePlayer);
   const qrContainer = $("acc-qr");
   if (qrContainer) {
@@ -693,7 +705,104 @@ for (const b of document.querySelectorAll<HTMLElement>(".subtabs [data-list]")) 
   b.addEventListener("click", () => { list = b.dataset.list as typeof list; void loadRanking(); });
 }
 
-// ===== eventos da conta & sincronização =====
+// ===== eventos da conta & sincronização (Google, Facebook, Número, Apple ID) =====
+let selectedProvider: AuthProvider = "google";
+
+const PROVIDER_UI: Record<AuthProvider, { label: string; placeholder: string; type: string }> = {
+  google: { label: "E-mail da conta Google (Gmail)", placeholder: "seuemail@gmail.com", type: "email" },
+  facebook: { label: "E-mail ou usuário do Facebook", placeholder: "seuemail@facebook.com", type: "text" },
+  phone: { label: "Seu Número com DDD (WhatsApp / Celular)", placeholder: "(11) 99999-9999", type: "tel" },
+  apple: { label: "Seu Apple ID (iCloud)", placeholder: "seuemail@icloud.com", type: "email" },
+};
+
+function selectSocialProvider(p: AuthProvider) {
+  selectedProvider = p;
+  for (const btn of document.querySelectorAll<HTMLElement>(".social-btn[data-provider]")) {
+    btn.classList.toggle("active", btn.dataset.provider === p);
+  }
+  const cfg = PROVIDER_UI[p];
+  const lbl = $("social-id-label");
+  const inp = $<HTMLInputElement>("social-id-input");
+  const waBtn = $("whatsapp-share-btn");
+  if (lbl) lbl.textContent = cfg.label;
+  if (inp) {
+    inp.placeholder = cfg.placeholder;
+    inp.type = cfg.type;
+  }
+  if (waBtn) waBtn.hidden = p !== "phone";
+  const msg = $("social-sync-msg");
+  if (msg) msg.textContent = "";
+}
+
+for (const btn of document.querySelectorAll<HTMLElement>(".social-btn[data-provider]")) {
+  btn.addEventListener("click", () => selectSocialProvider(btn.dataset.provider as AuthProvider));
+}
+
+const existingLinked = loadLinkedAccount();
+if (existingLinked) {
+  selectSocialProvider(existingLinked.provider);
+  const inp = $<HTMLInputElement>("social-id-input");
+  if (inp) inp.value = existingLinked.identifier;
+}
+
+$("whatsapp-share-btn")?.addEventListener("click", () => {
+  const rawPhone = $<HTMLInputElement>("social-id-input")?.value.trim() || "";
+  const url = accountShareUrl(activePlayer);
+  const text = encodeURIComponent(`🔥 Meu link de sincronização do Clawd Aura Farm:\n${url}`);
+  const digits = rawPhone ? normalizeIdentifier("phone", rawPhone) : "";
+  const waUrl = digits.length >= 12 ? `https://wa.me/${digits}?text=${text}` : `https://wa.me/?text=${text}`;
+  window.open(waUrl, "_blank", "noopener");
+});
+
+$<HTMLFormElement>("social-sync-form")?.addEventListener("submit", async e => {
+  e.preventDefault();
+  const idInput = $<HTMLInputElement>("social-id-input");
+  const pinInput = $<HTMLInputElement>("social-pin-input");
+  const msg = $("social-sync-msg");
+  const idVal = idInput.value.trim();
+  const pinVal = pinInput.value.trim();
+
+  const targetPlayer = await derivePlayerFromCredentials(selectedProvider, idVal, pinVal);
+  if (!targetPlayer) {
+    msg.textContent = "Preencha um identificador válido e uma senha/PIN de pelo menos 4 caracteres.";
+    return;
+  }
+
+  const label = PROVIDER_LABELS[selectedProvider];
+  msg.textContent = `Sincronizando conta com ${label}…`;
+  try {
+    if (onlineEnabled) {
+      const prevName = myName;
+      const serverData = await fetchPlayerState(targetPlayer);
+      activePlayer = targetPlayer;
+      savePlayer(activePlayer);
+      saveLinkedAccount({ provider: selectedProvider, identifier: idVal });
+      sync?.setPlayer(activePlayer);
+      onServer(serverData, "");
+      if (!serverData.name && prevName) {
+        try {
+          await sync?.setName(prevName);
+          await sync?.flush();
+        } catch { /* apelido já em uso na outra conta */ }
+      }
+      msg.textContent = `✅ Conta vinculada e sincronizada via ${label}! Use os mesmos dados no outro aparelho.`;
+      toast(`🎉 Conta sincronizada com ${label}!`);
+      pinInput.value = "";
+      renderAccount();
+    } else {
+      activePlayer = targetPlayer;
+      savePlayer(activePlayer);
+      saveLinkedAccount({ provider: selectedProvider, identifier: idVal });
+      msg.textContent = `✅ Conta vinculada a ${label}!`;
+      toast(`🎉 Conta vinculada a ${label}!`);
+      pinInput.value = "";
+      renderAccount();
+    }
+  } catch (err) {
+    msg.textContent = "Erro ao sincronizar: " + (err as Error).message;
+  }
+});
+
 $("copy-sync-link")?.addEventListener("click", async () => {
   try {
     await navigator.clipboard.writeText(accountShareUrl(activePlayer));
