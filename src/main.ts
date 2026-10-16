@@ -81,18 +81,49 @@ const sync = onlineEnabled ? createSync(activePlayer, onServer, ok => {
 }) : null;
 let firstSync = true;
 
+const LOCAL_COS_KEY = "clawd-aura-farm:cos-v1";
+interface LocalCosState {
+  owned: string[];
+  equipped: Partial<Record<Slot, string | null>>;
+}
+function loadLocalCos(): LocalCosState {
+  try {
+    const raw = JSON.parse(localStorage.getItem(LOCAL_COS_KEY) || "null");
+    if (raw && typeof raw === "object") {
+      return {
+        owned: Array.isArray(raw.owned) ? raw.owned.filter((x: unknown): x is string => typeof x === "string") : [],
+        equipped: raw.equipped && typeof raw.equipped === "object" ? raw.equipped : {},
+      };
+    }
+  } catch { /* ignore */ }
+  return { owned: [...state.owned], equipped: { ...state.equipped } };
+}
+function saveLocalCos(lc: LocalCosState) {
+  try { localStorage.setItem(LOCAL_COS_KEY, JSON.stringify(lc)); } catch { /* ignore */ }
+}
+const localCos = loadLocalCos();
 
 function onServer(r: ServerState, pending: string) {
   clockOffset = r.now - nowSec();
-  const prevOwned = state.owned;
-  const prevEquipped = { ...state.equipped };
   state = toState(r);
-  for (const id of prevOwned) {
-    if (!state.owned.includes(id)) state.owned.push(id);
+
+  // Mescla enfeites comprados localmente que o banco remoto ainda não tenha registrado
+  for (const id of localCos.owned) {
+    if (!state.owned.includes(id) && cosmeticById(id)) {
+      state.owned.push(id);
+      const price = cosmeticById(id)?.price ?? 0;
+      state.tokens = Math.max(0, state.tokens - price);
+    }
   }
-  for (const [slot, id] of Object.entries(prevEquipped) as [Slot, string][]) {
-    if (id && state.owned.includes(id) && !state.equipped[slot]) state.equipped[slot] = id;
+  // Aplica a escolha atual de equipamento de cada slot (sobrepondo o valor antigo do servidor)
+  for (const [slot, val] of Object.entries(localCos.equipped) as [Slot, string | null | undefined][]) {
+    if (val === null) {
+      delete state.equipped[slot];
+    } else if (val && state.owned.includes(val)) {
+      state.equipped[slot] = val;
+    }
   }
+
   for (const [c, a] of parseEvents(pending)) applyEvent(state, c, a, combo(), now());
   save(state);
   if (firstSync && r.offline >= 60) welcomeBack(r.offline, r.offline_gain);
@@ -152,6 +183,16 @@ function achievementUnlocked(id: string) {
 /** Aplica um evento local e, no modo online, manda para o servidor. */
 function act(code: string, arg = "") {
   const r = applyEvent(state, code, arg, combo(), now());
+  if (code === EV.buyCosmetic || code === EV.equip || code === EV.unequip) {
+    for (const id of state.owned) {
+      if (!localCos.owned.includes(id)) localCos.owned.push(id);
+    }
+    for (const sl of SLOTS) {
+      localCos.equipped[sl.id] = state.equipped[sl.id] ?? null;
+    }
+    saveLocalCos(localCos);
+    save(state);
+  }
   sync?.push(code + arg);
   return r;
 }
@@ -563,7 +604,8 @@ function rankRow(e: RankRow) {
 
   const pic = document.createElement("span");
   pic.className = "pic";
-  pic.innerHTML = clawdSvg(sanitize({ owned: Object.values(e.equipped ?? {}), equipped: e.equipped }).equipped);
+  const eq = isMe ? state.equipped : sanitize({ owned: Object.values(e.equipped ?? {}), equipped: e.equipped }).equipped;
+  pic.innerHTML = clawdSvg(eq);
 
   const info = document.createElement("div");
   info.className = "rank-info";
