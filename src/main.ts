@@ -3,7 +3,7 @@ import { ACHIEVEMENTS, achievementProgress, checkAchievements } from "./achievem
 import { COSMETICS, cosmeticById, SLOTS, type Slot } from "./cosmetics";
 import {
   allMaxed, applyEvent, buffActive, canBuy, canPrestige, clickGain, comboFor, costOf, daily, EV,
-  goldenVisible, isMaxed, LEVEL_BONUS, levelOf, LV, nowSec, parseEvents, passive, passivePerSecond,
+  goldenVisible, isMaxed, LEVEL_BONUS, levelOf, LV, mult, nowSec, parseEvents, passive, passivePerSecond,
   PRESTIGE_BONUS, RANKS, schedule, thiefVisible, THIEF, todayBR, UPGRADES, type State,
 } from "./game";
 import { createFx, reduceMotion } from "./fx";
@@ -104,9 +104,47 @@ function saveLocalCos(lc: LocalCosState) {
 }
 const localCos = loadLocalCos();
 
+const LOCAL_EXT_KEY = "clawd-aura-farm:ext-ups-v1";
+interface LocalExtState {
+  ia: number;
+  portal: number;
+  cosmic: number;
+  bonusAura: number;
+  spentAura: number;
+}
+function loadLocalExt(): LocalExtState {
+  try {
+    const raw = JSON.parse(localStorage.getItem(LOCAL_EXT_KEY) || "null");
+    if (raw && typeof raw === "object") {
+      return {
+        ia: Math.max(0, Math.floor(Number(raw.ia) || 0)),
+        portal: Math.max(0, Math.floor(Number(raw.portal) || 0)),
+        cosmic: Math.max(0, Math.floor(Number(raw.cosmic) || 0)),
+        bonusAura: Math.max(0, Number(raw.bonusAura) || 0),
+        spentAura: Math.max(0, Number(raw.spentAura) || 0),
+      };
+    }
+  } catch { /* ignore */ }
+  return { ia: state.upgrades.ia, portal: state.upgrades.portal, cosmic: state.upgrades.cosmic, bonusAura: 0, spentAura: 0 };
+}
+function saveLocalExt(ext: LocalExtState) {
+  try { localStorage.setItem(LOCAL_EXT_KEY, JSON.stringify(ext)); } catch { /* ignore */ }
+}
+const localExt = loadLocalExt();
+
 function onServer(r: ServerState, pending: string) {
   clockOffset = r.now - nowSec();
   state = toState(r);
+
+  // Se o servidor remoto ainda retornar array de 6 posições, mescla os 2 novos upgrades e a aura extra gerada
+  if (r.ups.length < 8) {
+    state.upgrades.ia = Math.max(state.upgrades.ia, localExt.ia);
+    state.upgrades.portal = Math.max(state.upgrades.portal, localExt.portal);
+    state.upgrades.cosmic = Math.max(state.upgrades.cosmic, localExt.cosmic);
+    state.aura = Math.max(0, state.aura + localExt.bonusAura - localExt.spentAura);
+    state.total += localExt.bonusAura;
+    state.lifetime += localExt.bonusAura;
+  }
 
   // Mescla enfeites comprados localmente que o banco remoto ainda não tenha registrado
   for (const id of localCos.owned) {
@@ -183,7 +221,37 @@ function achievementUnlocked(id: string) {
 
 /** Aplica um evento local e, no modo online, manda para o servidor. */
 function act(code: string, arg = "") {
+  const prevAura = state.aura;
+  const prevIa = state.upgrades.ia;
+  const prevPortal = state.upgrades.portal;
+  const prevCosmic = state.upgrades.cosmic;
   const r = applyEvent(state, code, arg, combo(), now());
+  if (code === EV.prestige || code === EV.reset) {
+    localExt.ia = 0;
+    localExt.portal = 0;
+    localExt.cosmic = 0;
+    localExt.bonusAura = 0;
+    localExt.spentAura = 0;
+    saveLocalExt(localExt);
+  } else if (code === "i" && state.upgrades.ia > prevIa) {
+    localExt.ia = state.upgrades.ia;
+    localExt.spentAura += prevAura - state.aura;
+    saveLocalExt(localExt);
+    save(state);
+  } else if (code === "o" && state.upgrades.portal > prevPortal) {
+    localExt.portal = state.upgrades.portal;
+    localExt.spentAura += prevAura - state.aura;
+    saveLocalExt(localExt);
+    save(state);
+  } else if (code === "x" && state.upgrades.cosmic > prevCosmic) {
+    localExt.cosmic = state.upgrades.cosmic;
+    saveLocalExt(localExt);
+    save(state);
+  } else if (code === EV.click && r && state.upgrades.portal > 0) {
+    const portalShare = (1.0 * state.upgrades.portal) / (1 + 0.5 * state.upgrades.click + 1.0 * state.upgrades.portal);
+    localExt.bonusAura += r.gain * portalShare;
+    saveLocalExt(localExt);
+  }
   if (code === EV.buyCosmetic || code === EV.equip || code === EV.unequip) {
     for (const id of state.owned) {
       if (!localCos.owned.includes(id)) localCos.owned.push(id);
@@ -405,7 +473,13 @@ function localTick() {
 let lastTick = performance.now();
 setInterval(() => {
   const t = performance.now();
-  passive(state, (t - lastTick) / 1000, now());
+  const dt = (t - lastTick) / 1000;
+  passive(state, dt, now());
+  if (state.upgrades.ia > 0 || state.upgrades.portal > 0) {
+    const extraRate = (150000 * state.upgrades.ia + 5000000 * state.upgrades.portal) * mult(state) * (buffActive(state, now()) ? 7 : 1);
+    localExt.bonusAura += extraRate * Math.min(dt, 10);
+    saveLocalExt(localExt);
+  }
   lastTick = t;
   if (!sync) localTick();
   render();
@@ -527,7 +601,7 @@ function renderStats() {
     { label: "Ladrões Capturados", val: String(state.thieves) },
     { label: "Sequência de Dias", val: `${state.streak} dias` },
     { label: "Fichas 67 Disponíveis", val: String(state.tokens) },
-    { label: "Upgrades Comprados", val: `${totalBought}/145` },
+    { label: "Upgrades Comprados", val: `${totalBought}/190` },
     { label: "Conquistas Concluídas", val: `${state.achievements.length}/${ACHIEVEMENTS.length}` },
     { label: "Enfeites Possuídos", val: `${state.owned.length}/${COSMETICS.length}` },
     { label: "Sincronização", val: onlineEnabled ? "🟢 Supabase" : "🟡 Local" },
