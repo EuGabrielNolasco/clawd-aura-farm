@@ -626,9 +626,15 @@ async function loadRanking() {
   const dist = $("rank-distribution");
   if (dist) dist.hidden = true;
   for (const b of document.querySelectorAll<HTMLElement>(".subtabs [data-list]")) b.classList.toggle("on", b.dataset.list === list);
+  if (!sync) {
+    const localRow: RankRow = { rank: 1, name: myName || "Você (Modo Local)", lifetime: state.lifetime, prestige: state.prestige, equipped: state.equipped as Record<string, string>, me: true };
+    renderRankDistribution([localRow]);
+    ol.replaceChildren(rankRow(localRow));
+    return;
+  }
   ol.replaceChildren(Object.assign(document.createElement("li"), { textContent: "Carregando…" }));
   try {
-    const rows = list === "top" ? await sync!.top() : await sync!.around();
+    const rows = list === "top" ? await sync.top() : await sync.around();
     if (!rows.length) {
       ol.replaceChildren(Object.assign(document.createElement("li"), {
         textContent: list === "around" ? "Escolha um apelido acima para ver quem está perto de você, ou veja a aba Todos!" : "Ninguém ainda. Seja o primeiro!",
