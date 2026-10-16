@@ -18,7 +18,7 @@
   },
   "homepage": "https://eugabrielnolasco.github.io/clawd-aura-farm/",
   "devDependencies": {
-    "@types/qrcode-generator": "^0.0.16",
+    "@types/qrcode-generator": "^1.0.6",
     "typescript": "^7.0.2",
     "vite": "^8.3.2",
     "vitest": "^5.0.3"
