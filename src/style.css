@@ -372,14 +372,15 @@ button:focus-visible { outline: 3px solid var(--ink); outline-offset: 4px; }
 .top li { gap: .55rem; align-items: center; padding: .45rem .6rem; }
 .top li::before { content: none; }
 .top li .pos { color: var(--clawd); min-width: 3.2ch; flex: none; font-weight: 700; }
-.top li .pic { width: 32px; height: 32px; flex: none; }
-.top li .pic svg { width: 100%; height: 100%; }
-.top li .rank-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: .15rem; }
+.top li .pic { width: 40px; height: 40px; flex: none; border-radius: 6px; overflow: hidden; border: 1px solid color-mix(in srgb, var(--violet) 60%, transparent); background: color-mix(in srgb, var(--violet) 18%, transparent); }
+.top li .pic svg { width: 100%; height: 100%; display: block; }
+.top li .rank-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: .2rem; }
 .top li .rank-line { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; }
 .top li .rank-name { font-weight: 700; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
 .top li .rank-stars { font-size: .95rem; color: var(--aura); background: color-mix(in srgb, var(--aura) 16%, transparent); border: 1px solid color-mix(in srgb, var(--aura) 45%, transparent); padding: 0 .35rem; border-radius: 4px; white-space: nowrap; }
-.top li .rank-sub { display: flex; align-items: center; gap: .35rem; }
+.top li .rank-sub { display: flex; align-items: center; gap: .3rem; flex-wrap: wrap; }
 .top li .rank-badge { font-size: .9rem; color: #6bffe0; background: color-mix(in srgb, #6bffe0 14%, transparent); border: 1px solid color-mix(in srgb, #6bffe0 35%, transparent); padding: 0 .4rem; border-radius: 4px; white-space: nowrap; }
+.top li .rank-cos-chip { font-family: var(--mono); font-size: .78rem; color: var(--aura); background: color-mix(in srgb, var(--aura) 12%, transparent); border: 1px solid color-mix(in srgb, var(--aura) 35%, transparent); padding: 0 .35rem; border-radius: 4px; white-space: nowrap; }
 .top li .rank-aura { flex: none; font-size: 1.25rem; color: var(--aura); }
 .top li.me { outline: 2px solid var(--aura); background: color-mix(in srgb, var(--aura) 18%, transparent); }
 
