@@ -51,7 +51,7 @@ describe("schema.sql espelha game.ts", () => {
   });
 
   it("catálogo de enfeites", () => {
-    const rows = [...schema.matchAll(/\('([A-Z])', '(\w+)', '(\w+)', (\d+)\)/g)].map(m => [m[1], m[2], m[3], Number(m[4])]);
+    const rows = [...schema.matchAll(/\('([A-Z0-9])', '(\w+)', '(\w+)', (\d+)\)/g)].map(m => [m[1], m[2], m[3], Number(m[4])]);
     expect(rows).toEqual(COSMETICS.map(c => [c.code, c.id, c.slot, c.price]));
     for (const sl of SLOTS) expect(schema).toContain(`when '${sl.code}' then '${sl.id}'`);
   });

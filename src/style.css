@@ -348,6 +348,8 @@ button:focus-visible { outline: 3px solid var(--ink); outline-offset: 4px; }
 .bg-cyber { background: repeating-linear-gradient(0deg, #ff2a6d22 0 1px, transparent 1px 16px), repeating-linear-gradient(90deg, #00e5ff22 0 1px, transparent 1px 24px), linear-gradient(#090418, #1f093d 55%, #ff2a6d 58%, #071b2f 60%, #040814) !important; }
 .bg-espaco { background: radial-gradient(circle at 20% 30%, #fff 0 1px, transparent 2px) 0 0 / 60px 60px, radial-gradient(circle at 70% 80%, #fff 0 1px, transparent 2px) 0 0 / 90px 90px, radial-gradient(ellipse at 60% 40%, #3b1d6e, #05030c 70%) !important; }
 .bg-vulcao { background: radial-gradient(circle at 30% 75%, #ffd166aa 1.5px, transparent 3px) 0 0 / 40px 40px, radial-gradient(circle at 75% 65%, #ff4500aa 2px, transparent 4px) 0 0 / 55px 55px, linear-gradient(#1a0505, #450a0a 55%, #dc2626 80%, #f97316) !important; }
+.bg-matrix { background: radial-gradient(circle, #39ff88cc 1.5px, transparent 2.5px) 6px 4px / 22px 18px, repeating-linear-gradient(90deg, #003b1844 0 2px, transparent 2px 18px), linear-gradient(#020d06, #062812 60%, #021408) !important; }
+.bg-blackhole { background: radial-gradient(circle at 50% 45%, #000000 0 14%, #ffd166 15% 17%, #ff2a6d 18% 24%, #6d28d9 25% 42%, #090314 72%) !important; }
 
 /* ===== Menu com abas ===== */
 .tabs { display: flex; gap: .35rem; flex-wrap: wrap; flex: 1; }

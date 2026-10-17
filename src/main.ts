@@ -104,6 +104,33 @@ function saveLocalCos(lc: LocalCosState) {
 }
 const localCos = loadLocalCos();
 
+const GORDURINHA_OWNED = [
+  "bg_favela", "bg_espaco", "bg_vulcao",
+  "hat_coroa",
+  "face_bigode", "face_juliet", "face_ninja", "face_laser",
+  "outfit_terno",
+  "color_dourado",
+];
+
+function enforceLocalCosmetics(deductTokens = false) {
+  for (const id of localCos.owned) {
+    if (!state.owned.includes(id) && cosmeticById(id)) {
+      state.owned.push(id);
+      if (deductTokens && !GORDURINHA_OWNED.includes(id)) {
+        const price = cosmeticById(id)?.price ?? 0;
+        state.tokens = Math.max(0, state.tokens - price);
+      }
+    }
+  }
+  for (const [slot, val] of Object.entries(localCos.equipped) as [Slot, string | null | undefined][]) {
+    if (val === null) {
+      delete state.equipped[slot];
+    } else if (val && state.owned.includes(val) && cosmeticById(val)) {
+      state.equipped[slot] = val;
+    }
+  }
+}
+
 const GORDURINHA_KEY = "clawd-aura-farm:gordurinha-v1";
 let gordurinhaRestored = false;
 try {
@@ -116,13 +143,7 @@ function restoreGordurinhaAccount(silent = false) {
   gordurinhaRestored = true;
   try { localStorage.setItem(GORDURINHA_KEY, "1"); } catch { /* ignore */ }
 
-  const ownedItems = [
-    "bg_favela", "bg_espaco", "bg_vulcao",
-    "hat_coroa",
-    "face_bigode", "face_juliet", "face_ninja", "face_laser",
-    "outfit_terno",
-    "color_dourado",
-  ];
+  const ownedItems = GORDURINHA_OWNED;
   const equippedItems: Partial<Record<Slot, string>> = {
     bg: "bg_vulcao",
     hat: "hat_coroa",
@@ -165,12 +186,12 @@ function restoreGordurinhaAccount(silent = false) {
   for (const id of achItems) {
     if (!state.achievements.includes(id)) state.achievements.push(id);
   }
-  if (!silent || Object.keys(state.equipped).length === 0) {
-    state.equipped = { ...equippedItems };
-    for (const [sl, val] of Object.entries(equippedItems) as [Slot, string][]) {
+  for (const [sl, val] of Object.entries(equippedItems) as [Slot, string][]) {
+    if (!silent || localCos.equipped[sl] === undefined) {
       localCos.equipped[sl] = val;
     }
   }
+  enforceLocalCosmetics(false);
 
   saveLocalCos(localCos);
   save(state);
@@ -200,11 +221,14 @@ function restoreGordurinhaAccount(silent = false) {
 
 if (gordurinhaRestored) {
   restoreGordurinhaAccount(true);
+} else {
+  enforceLocalCosmetics(false);
 }
 
 function onServer(r: ServerState, pending: string) {
   clockOffset = r.now - nowSec();
   if (gordurinhaRestored && r.lifetime < state.lifetime) {
+    enforceLocalCosmetics(false);
     myName = "Gordurinha";
     lastRank = 1;
     lastAhead = null;
@@ -217,25 +241,10 @@ function onServer(r: ServerState, pending: string) {
     return;
   }
   state = toState(r);
-
-  // Mescla enfeites comprados localmente que o banco remoto ainda não tenha registrado
-  for (const id of localCos.owned) {
-    if (!state.owned.includes(id) && cosmeticById(id)) {
-      state.owned.push(id);
-      const price = cosmeticById(id)?.price ?? 0;
-      state.tokens = Math.max(0, state.tokens - price);
-    }
-  }
-  // Aplica a escolha atual de equipamento de cada slot (sobrepondo o valor antigo do servidor)
-  for (const [slot, val] of Object.entries(localCos.equipped) as [Slot, string | null | undefined][]) {
-    if (val === null) {
-      delete state.equipped[slot];
-    } else if (val && state.owned.includes(val)) {
-      state.equipped[slot] = val;
-    }
-  }
+  enforceLocalCosmetics(true);
 
   for (const [c, a] of parseEvents(pending)) applyEvent(state, c, a, combo(), now());
+  enforceLocalCosmetics(false);
   save(state);
   if (firstSync && r.offline >= 60) welcomeBack(r.offline, r.offline_gain);
   if (r.daily > 0) dailyReward(r.daily, state.streak);

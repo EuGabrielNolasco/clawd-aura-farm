@@ -83,11 +83,11 @@ create or replace function public.aura_cosmetics()
 returns table (code text, id text, slot text, price int)
 language sql immutable set search_path = '' as $$
   values
-    ('A', 'bg_favela', 'bg', 40), ('B', 'bg_praia', 'bg', 40), ('C', 'bg_server', 'bg', 60), ('O', 'bg_cyber', 'bg', 65), ('D', 'bg_espaco', 'bg', 90), ('R', 'bg_vulcao', 'bg', 110),
-    ('E', 'hat_bone', 'hat', 20), ('S', 'hat_viking', 'hat', 45), ('T', 'hat_fones', 'hat', 55), ('F', 'hat_coroa', 'hat', 80), ('U', 'hat_aureola', 'hat', 95), ('G', 'hat_megabrain', 'hat', 120),
-    ('J', 'face_bigode', 'face', 15), ('I', 'face_3d', 'face', 25), ('H', 'face_juliet', 'face', 30), ('W', 'face_ninja', 'face', 40), ('V', 'face_laser', 'face', 50),
-    ('K', 'outfit_selecao', 'outfit', 50), ('X', 'outfit_moletom', 'outfit', 65), ('L', 'outfit_capa', 'outfit', 70), ('M', 'outfit_terno', 'outfit', 100), ('Y', 'outfit_armadura', 'outfit', 115),
-    ('Q', 'color_camuflado', 'color', 35), ('P', 'color_neon', 'color', 45), ('Z', 'color_rubi', 'color', 55), ('N', 'color_dourado', 'color', 60)
+    ('A', 'bg_favela', 'bg', 40), ('B', 'bg_praia', 'bg', 40), ('C', 'bg_server', 'bg', 60), ('O', 'bg_cyber', 'bg', 65), ('D', 'bg_espaco', 'bg', 90), ('R', 'bg_vulcao', 'bg', 110), ('0', 'bg_matrix', 'bg', 125), ('1', 'bg_blackhole', 'bg', 150),
+    ('E', 'hat_bone', 'hat', 20), ('S', 'hat_viking', 'hat', 45), ('T', 'hat_fones', 'hat', 55), ('2', 'hat_cartola', 'hat', 70), ('F', 'hat_coroa', 'hat', 80), ('U', 'hat_aureola', 'hat', 95), ('3', 'hat_chifres', 'hat', 110), ('G', 'hat_megabrain', 'hat', 120),
+    ('J', 'face_bigode', 'face', 15), ('I', 'face_3d', 'face', 25), ('H', 'face_juliet', 'face', 30), ('W', 'face_ninja', 'face', 40), ('V', 'face_laser', 'face', 50), ('4', 'face_ciborgue', 'face', 65), ('5', 'face_fogo', 'face', 85),
+    ('K', 'outfit_selecao', 'outfit', 50), ('X', 'outfit_moletom', 'outfit', 65), ('L', 'outfit_capa', 'outfit', 70), ('6', 'outfit_manto', 'outfit', 95), ('M', 'outfit_terno', 'outfit', 100), ('Y', 'outfit_armadura', 'outfit', 115), ('7', 'outfit_asas', 'outfit', 135),
+    ('Q', 'color_camuflado', 'color', 35), ('P', 'color_neon', 'color', 45), ('Z', 'color_rubi', 'color', 55), ('N', 'color_dourado', 'color', 60), ('8', 'color_diamante', 'color', 75), ('9', 'color_sombra', 'color', 90)
 $$;
 
 -- ===== API pública =====

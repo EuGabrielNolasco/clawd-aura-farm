@@ -37,6 +37,8 @@ export const COSMETICS: readonly Cosmetic[] = [
   { id: "bg_cyber", code: "O", slot: "bg", name: "Cidade Cyberpunk", price: 65, bgClass: "bg-cyber" },
   { id: "bg_espaco", code: "D", slot: "bg", name: "Espaço sideral", price: 90, bgClass: "bg-espaco" },
   { id: "bg_vulcao", code: "R", slot: "bg", name: "Vulcão de Aura", price: 110, bgClass: "bg-vulcao" },
+  { id: "bg_matrix", code: "0", slot: "bg", name: "Matrix 67", price: 125, bgClass: "bg-matrix" },
+  { id: "bg_blackhole", code: "1", slot: "bg", name: "Buraco Negro", price: 150, bgClass: "bg-blackhole" },
   // chapéus
   { id: "hat_bone", code: "E", slot: "hat", name: "Boné aba reta", price: 20,
     svg: px(9, 6, 14, 3, "#1d4ed8") + px(17, 8, 9, 1, "#1d4ed8") + px(14, 6, 4, 1, "#ffd166") },
@@ -44,10 +46,14 @@ export const COSMETICS: readonly Cosmetic[] = [
     svg: px(9, 6, 14, 3, "#64748b") + px(10, 5, 12, 1, "#94a3b8") + px(6, 5, 3, 2, "#fef3c7") + px(5, 3, 2, 2, "#fef3c7") + px(23, 5, 3, 2, "#fef3c7") + px(25, 3, 2, 2, "#fef3c7") + px(15, 6, 2, 3, "#cbd5e1") },
   { id: "hat_fones", code: "T", slot: "hat", name: "Headset RGB", price: 55,
     svg: px(8, 5, 16, 2, "#1e293b") + px(9, 4, 14, 1, "#ff2a6d") + px(6, 9, 3, 6, "#1e293b") + px(7, 10, 1, 4, "#00e5ff") + px(23, 9, 3, 6, "#1e293b") + px(24, 10, 1, 4, "#39ff88") },
+  { id: "hat_cartola", code: "2", slot: "hat", name: "Cartola Magnata", price: 70,
+    svg: px(7, 8, 18, 1, "#111827") + px(10, 2, 12, 6, "#1f2937") + px(10, 7, 12, 1, "#ffd166") + px(19, 3, 1, 3, "#4b5563") },
   { id: "hat_coroa", code: "F", slot: "hat", name: "Coroa de ouro", price: 80,
     svg: px(11, 6, 10, 3, "#ffd166") + px(11, 4, 2, 2, "#ffd166") + px(15, 3, 2, 3, "#ffd166") + px(19, 4, 2, 2, "#ffd166") + px(15, 7, 2, 1, "#ff6b6b") },
   { id: "hat_aureola", code: "U", slot: "hat", name: "Auréola Divina", price: 95,
     svg: px(10, 2, 12, 1, "#ffd166") + px(8, 3, 2, 1, "#ffd166") + px(22, 3, 2, 1, "#ffd166") + px(10, 4, 12, 1, "#ffd166") + px(12, 2, 4, 1, "#ffffff") },
+  { id: "hat_chifres", code: "3", slot: "hat", name: "Chifres de Fogo", price: 110,
+    svg: px(7, 5, 3, 3, "#dc2626") + px(6, 3, 2, 3, "#f97316") + px(5, 1, 2, 2, "#ffd166") + px(22, 5, 3, 3, "#dc2626") + px(24, 3, 2, 3, "#f97316") + px(25, 1, 2, 2, "#ffd166") },
   { id: "hat_megabrain", code: "G", slot: "hat", name: "Capacete Mega Brain", price: 120,
     svg: px(9, 4, 14, 5, "#94a3b8") + px(10, 3, 12, 1, "#cbd5e1") + px(11, 5, 10, 2, "#ff8fb8") + px(13, 5, 1, 1, "#6bffe0") + px(18, 6, 1, 1, "#6bffe0") + px(15, 2, 2, 1, "#6bffe0") },
   // rosto
@@ -61,6 +67,10 @@ export const COSMETICS: readonly Cosmetic[] = [
     svg: px(8, 15, 16, 6, "#111827") + px(8, 9, 16, 2, "#dc2626") + px(24, 10, 3, 1, "#dc2626") + px(25, 11, 3, 1, "#dc2626") },
   { id: "face_laser", code: "V", slot: "face", name: "Visor Laser", price: 50,
     svg: px(8, 12, 16, 3, "#1e293b") + px(9, 13, 14, 1, "#ff2a6d") + px(11, 13, 4, 1, "#ffd166") + px(17, 13, 4, 1, "#ffd166") },
+  { id: "face_ciborgue", code: "4", slot: "face", name: "Scouter Ciborgue", price: 65,
+    svg: px(6, 11, 2, 5, "#94a3b8") + px(8, 11, 7, 5, "#39ff8888") + px(8, 11, 7, 1, "#39ff88") + px(11, 13, 2, 1, "#ffd166") },
+  { id: "face_fogo", code: "5", slot: "face", name: "Olhos de Chama", price: 85,
+    svg: px(9, 12, 5, 3, "#00e5ff") + px(18, 12, 5, 3, "#00e5ff") + px(10, 11, 3, 1, "#38bdf8") + px(19, 11, 3, 1, "#38bdf8") + px(11, 13, 2, 1, "#ffffff") + px(19, 13, 2, 1, "#ffffff") },
   // roupas
   { id: "outfit_selecao", code: "K", slot: "outfit", name: "Camisa da seleção", price: 50,
     svg: px(8, 17, 16, 4, "#facc15") + px(8, 17, 16, 1, "#16a34a") + px(15, 18, 2, 2, "#1d4ed8") },
@@ -68,15 +78,21 @@ export const COSMETICS: readonly Cosmetic[] = [
     svg: px(8, 16, 16, 5, "#6d28d9") + px(10, 16, 12, 1, "#8b5cf6") + px(13, 18, 2, 2, "#ffd166") + px(17, 18, 2, 2, "#ffd166") },
   { id: "outfit_capa", code: "L", slot: "outfit", name: "Capa de herói", price: 70,
     svg: px(6, 10, 2, 11, "#dc2626") + px(24, 10, 2, 11, "#dc2626") + px(8, 10, 16, 1, "#dc2626") },
+  { id: "outfit_manto", code: "6", slot: "outfit", name: "Manto Sombrio", price: 95,
+    svg: px(7, 15, 18, 6, "#111827") + px(8, 15, 16, 1, "#dc2626") + px(10, 17, 3, 2, "#ef4444") + px(19, 18, 3, 2, "#ef4444") },
   { id: "outfit_terno", code: "M", slot: "outfit", name: "Terno sigma", price: 100,
     svg: px(8, 16, 16, 5, "#111827") + px(15, 16, 2, 5, "#f3ecff") + px(15, 17, 2, 3, "#dc2626") },
   { id: "outfit_armadura", code: "Y", slot: "outfit", name: "Armadura Dourada", price: 115,
     svg: px(7, 16, 18, 5, "#eab308") + px(6, 15, 4, 2, "#fef08a") + px(22, 15, 4, 2, "#fef08a") + px(14, 17, 4, 3, "#38bdf8") },
+  { id: "outfit_asas", code: "7", slot: "outfit", name: "Asas Celestiais", price: 135,
+    svg: px(2, 9, 6, 3, "#ffffff") + px(3, 12, 5, 3, "#e2e8f0") + px(4, 15, 4, 2, "#cbd5e1") + px(24, 9, 6, 3, "#ffffff") + px(24, 12, 5, 3, "#e2e8f0") + px(24, 15, 4, 2, "#cbd5e1") + px(8, 16, 16, 5, "#fef08a") + px(14, 17, 4, 3, "#ffd166") },
   // cores
   { id: "color_camuflado", code: "Q", slot: "color", name: "Camuflado", price: 35, fill: "#5b7a3a" },
   { id: "color_neon", code: "P", slot: "color", name: "Neon", price: 45, fill: "#39ff88" },
   { id: "color_rubi", code: "Z", slot: "color", name: "Rubi Carmesim", price: 55, fill: "#ff2a6d" },
   { id: "color_dourado", code: "N", slot: "color", name: "Dourado", price: 60, fill: "#ffd166" },
+  { id: "color_diamante", code: "8", slot: "color", name: "Diamante Glacial", price: 75, fill: "#38bdf8" },
+  { id: "color_sombra", code: "9", slot: "color", name: "Sombra Galáctica", price: 90, fill: "#a855f7" },
 ];
 
 export const cosmeticByCode = (code: string) => COSMETICS.find(c => c.code === code);
