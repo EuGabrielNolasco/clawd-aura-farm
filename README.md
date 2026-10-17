@@ -5,7 +5,7 @@
 [![Licença: MIT](https://img.shields.io/badge/licen%C3%A7a-MIT-8b5cf6?style=flat-square)](LICENSE)
 ![TypeScript](https://img.shields.io/badge/TypeScript-Vite-d97757?style=flat-square)
 
-Jogo incremental (*idle clicker*) para o navegador. O Clawd, mascote do Claude Code, faz o **six seven** sem parar enquanto você farma aura, sobe por 16 níveis cheios de memes BR, caça Cérebros Dourados, veste o Clawd com enfeites e disputa o ranking global.
+Jogo incremental (*idle clicker*) para o navegador (PC e Celular). O Clawd, mascote do Claude Code, faz o **six seven** sem parar enquanto você farma aura, sobe por **16 níveis** cheios de memes BR, caça Cérebros Dourados, gira a **Roleta da Sorte 67**, veste o Clawd com **36 enfeites** e disputa o **Ranking Global em tempo real**.
 
 **[▶ Jogar agora](https://eugabrielnolasco.github.io/clawd-aura-farm/)**
 
@@ -14,12 +14,13 @@ Jogo incremental (*idle clicker*) para o navegador. O Clawd, mascote do Claude C
 - [Documentação viva (`docs/`)](#documentação-viva)
 - [Funcionalidades](#funcionalidades)
 - [Como jogar](#como-jogar)
-- [Sincronização PC ⇄ Celular](#sincronização-pc--celular)
-- [Roleta da Sorte 67](#roleta-da-sorte-67)
+- [Sincronização com Google OAuth 2.0 (PC ⇄ Celular)](#sincronização-com-google-oauth-20-pc--celular)
+- [Roleta da Sorte 67 & Missões Diárias](#roleta-da-sorte-67--missões-diárias)
 - [Níveis](#níveis)
-- [Loja](#loja)
-- [Eventos, conquistas e enfeites](#eventos-conquistas-e-enfeites)
-- [Ranking e segurança](#ranking-e-segurança)
+- [Loja de Aura (8 Upgrades)](#loja-de-aura-8-upgrades)
+- [Eventos, conquistas e enfeites (36 itens)](#eventos-conquistas-e-enfeites-36-itens)
+- [Prestígio (Renascer ⭐)](#prestígio-renascer-)
+- [Ranking em tempo real e segurança](#ranking-em-tempo-real-e-segurança)
 - [Rodando localmente](#rodando-localmente)
 - [Configurando o ranking (Supabase)](#configurando-o-ranking-supabase)
 - [Painel dev](#painel-dev)
@@ -28,133 +29,147 @@ Jogo incremental (*idle clicker*) para o navegador. O Clawd, mascote do Claude C
 - [Contribuindo](#contribuindo)
 - [Licença](#licença)
 
-
 ## Documentação Viva
 
-O projeto conta com uma central de documentação completa e atualizada em [`docs/`](docs/):
+O projeto conta com uma central de documentação completa em [`docs/`](docs/):
 
 - **[docs/INDEX.md](docs/INDEX.md):** Hub central da documentação viva.
 - **[docs/ARQUITETURA.md](docs/ARQUITETURA.md):** Arquitetura técnica, segurança, anti-cheat e CSP.
-- **[docs/CONTAS_E_SINCRONIZACAO.md](docs/CONTAS_E_SINCRONIZACAO.md):** Guia de sincronização entre PC e Celular via QR Code, chave e links.
+- **[docs/CONTAS_E_SINCRONIZACAO.md](docs/CONTAS_E_SINCRONIZACAO.md):** Guia de sincronização e autenticação Google OAuth 2.0.
 - **[docs/MECANICAS_E_ECONOMIA.md](docs/MECANICAS_E_ECONOMIA.md):** Fórmulas matemáticas, curvas dos 16 níveis e eventos.
-- **[docs/CONQUISTAS_E_COSMETICOS.md](docs/CONQUISTAS_E_COSMETICOS.md):** As 15 conquistas e os 16 enfeites em pixel art SVG.
-- **[docs/CHANGELOG.md](docs/CHANGELOG.md):** Histórico completo de versões (v1.0.0 a v2.1.0).
+- **[docs/CONQUISTAS_E_COSMETICOS.md](docs/CONQUISTAS_E_COSMETICOS.md):** As 15 conquistas e os 36 enfeites em pixel art SVG.
+- **[docs/CHANGELOG.md](docs/CHANGELOG.md):** Histórico completo de versões.
 - **[docs/ROADMAP.md](docs/ROADMAP.md):** Próximas ideias e melhorias planejadas.
 
 ## Funcionalidades
 
-- **Sincronização entre PC e Celular:** Jogue no celular e continue no computador (ou vice-versa). Acesso via **QR Code**, link direto de compartilhamento (`#sync=...`), chave da conta `AURA_...` ou backup em arquivo JSON.
-- **Roleta da Sorte 67:** Minigame diário de engajamento! Ganhe giros diários e gire a roleta para faturar Fichas 67, ativação instantânea do Mega Brain ou rajadas de aura passiva.
-- **Painel de Estatísticas da Carreira:** Acompanhe cliques totais, taxa real de crítico, recordes de combo e eventos capturados.
-- **Barras de Progresso nas Conquistas:** Veja visualmente o quanto falta para desbloquear cada uma das 15 conquistas.
-- **Feedback Tátil & Mobile First:** Vibração háptica no celular (`navigator.vibrate`) em cliques normais, críticos e eventos, além de medidor de CPS em tempo real.
-- **Instalável (PWA):** Adicione à tela inicial do celular como aplicativo nativo, rodando em tela cheia sem barra de navegador.
-- **16 níveis com memes BR**, de NPC a O Próprio 67, passando por Cria, Brabo, O Pai Tá On, Mega Brain e Coop Thief.
-- **Combo de cliques:** clicar rápido multiplica a aura até ×3.
-- **Cérebro Dourado:** aparece de vez em quando; pegar ativa o *Modo Mega Brain*, com HUD estilo Jarvis e ×7 em toda a aura por 67 segundos.
-- **Ladrão do Coop Thief:** a partir do nível 8, um ladrãozinho atravessa a tela; pegar rende Fichas 67 e +1 giro na Roleta.
-- **Loja com 6 upgrades**, cada um com limite de compras.
-- **Fichas 67, conquistas e login diário:** 15 conquistas e uma recompensa por dias seguidos jogando.
-- **Loja de enfeites:** 16 itens entre fundos, chapéus, óculos, roupas e cores para o Clawd, pagos com Fichas 67.
-- **Prestígio:** no último nível dá para renascer com +25% de aura para sempre.
-- **Ranking global** com o Top 10, quem está perto de você e um aviso de quanto falta para passar o próximo. Os enfeites de cada jogador aparecem no ranking.
-- **Progresso offline:** o Clawd continua farmando enquanto você está fora, até 12 horas.
-- **Efeitos sonoros 8-bit** sintetizados no navegador (fanfarras por nível, reator do Mega Brain, ladrão, conquistas), com botão de mudo.
-- **Seguro contra trapaça:** no modo online, o servidor calcula tudo.
-- **Acessível e responsivo:** dá para jogar pelo teclado, as animações respeitam o movimento reduzido e, no celular, a loja abre como gaveta.
+- **Login e Sincronização com Google OAuth 2.0:** Conecte sua conta com 1 clique no botão **Continuar com o Google** para manter seu progresso salvo e sincronizado entre PC e celular, sem precisar copiar códigos ou chaves manuais.
+- **Apelido Personalizável:** Escolha e altere seu apelido no jogo e no Ranking Global a qualquer momento na aba **Conta** ou **Ranking**, independente do nome da sua conta Google.
+- **Roleta da Sorte 67 (10 Fatias + Missões Diárias):** Gire a roleta para ganhar pacotes de **Fichas 67** (`+5`, `+10`, `+15`, `+25` e Jackpot de `+67`), **Rajadas/Tempestades/Tsunamis de Aura** ou ativação imediata do **Modo Mega Brain (×7)** e **Overdrive 67 (134s)**.
+- **Economia Exclusiva de Giros e Fichas 67:**
+  - **Giros na Roleta (🎰):** Recebidos exclusivamente com **Login Diário**, **Missões Diárias concluídas** e **Rank subido** (além de conquistas desbloqueadas).
+  - **Fichas 67 (🎟):** Recebidas exclusivamente com **Conquistas concluídas** e **prêmios ganhos na Roleta da Sorte**.
+- **Loja de Aura com 8 Upgrades (190 níveis):** De *Clawd auxiliar* e *Mão firme* até *Datacenter do Clawd*, *IA Quântica 67*, *Portal Multiversal* e *Aura cósmica*, com balanceamento anti-inflação.
+- **Loja de Enfeites com 36 Cosméticos:** 8 fundos animados, 8 chapéus, 7 acessórios de rosto, 7 roupas e 6 cores especiais para personalizar o Clawd. O visual equipado fica salvo permanentemente e aparece no avatar do jogador no Ranking Global em tempo real!
+- **Prestígio (Renascer ⭐):** Ao alcançar o nível máximo (*O Próprio 67*), renasça zerando a aura atual e toda a loja para recomeçar do nível *NPC* com **+1 Estrela (⭐)** e **+25% de bônus permanente** em toda a aura, mantendo Fichas 67, Enfeites, Conquistas e Aura Vitalícia no Ranking.
+- **16 níveis com memes BR:** De *NPC* a *O Próprio 67*, passando por *Cria*, *Brabo*, *O Pai Tá On*, *Sigma*, *Mega Brain* e *Coop Thief*.
+- **Combo de cliques e medidor de CPS:** Clicar rápido multiplica a aura dos cliques em até **×3**.
+- **Cérebro Dourado & Ladrão do Coop Thief:** Eventos dinâmicos na tela que ativam o *Modo Mega Brain* (HUD Jarvis e ×7 em toda a aura por 67s) ou recuperam aura roubada e avançam missões diárias.
+- **Ranking Global em Tempo Real:** Veja o Top Geral e quem está perto de você, com transmissão instantânea de roupas equipadas, estrelas de prestígio e aura vitalícia via Supabase Realtime.
+- **Mobile First & PWA Instalável:** Layout responsivo ajustado para celulares sem cortes nem rolagem lateral, vibração háptica (`navigator.vibrate`) e suporte a instalação na tela inicial.
+- **Efeitos sonoros 8-bit:** Sintetizados via Web Audio API com opção de mudo.
 
 ## Como jogar
 
-1. Clique no Clawd ou no botão **FARMAR AURA**. Clicar rápido enche o **combo**.
-2. Gaste a aura na **loja**. Os upgrades de aura por segundo continuam rendendo mesmo com o jogo fechado.
-3. Fique de olho no **Cérebro Dourado** voando pela tela e, a partir do nível Coop Thief, no **ladrão**.
-4. Junte **Fichas 67** com conquistas, login diário, ladrões e a **Roleta**, e gaste em **enfeites**.
-5. O nível é definido pela aura farmada nesta vida, então gastar na loja não faz você cair de nível.
-6. No último nível, **renasça** para ganhar +25% permanente.
-7. Abra o **Ranking**, escolha um apelido e veja quem está logo à sua frente.
-8. Para jogar no celular e no computador com a mesma conta, use o painel **Conta & PC** e aponte a câmera para o QR Code!
+1. Clique no Clawd ou no botão **FARMAR AURA**. Clicar rápido enche a barra de **combo** (até ×3).
+2. Gaste sua aura na **Loja** para comprar upgrades automáticos e de clique. Os upgrades de aura por segundo continuam rendendo mesmo com o jogo fechado (até 12h offline).
+3. Fique atento ao **Cérebro Dourado** voando pela tela (ativa ×7 em toda a aura) e, a partir do nível *Coop Thief*, ao **ladrão**.
+4. Conclua **Missões Diárias**, faça **Login Diário** e suba de **Rank** para ganhar giros na **Roleta da Sorte 67**.
+5. Junte **Fichas 67** nas **Conquistas** e na **Roleta da Sorte** para comprar e equipar os **36 enfeites** do Clawd.
+6. No nível máximo (*O Próprio 67*), clique em **Renascer** para zerar a aura e a loja da vida atual em troca de uma **Estrela (⭐)** que dá **+25% de aura para sempre**.
 
-## Sincronização PC ⇄ Celular
+## Sincronização com Google OAuth 2.0 (PC ⇄ Celular)
 
-O jogo não prende seu save ao navegador:
-- **Escanear QR Code:** Abra a aba **Conta & PC** no computador e aponte a câmera do celular para o QR Code. O celular abre direto com o seu save sincronizado!
-- **Copiar Link Direto:** Clique em *Copiar Link de Acesso Direto* e envie para si mesmo no WhatsApp ou e-mail. Ao abrir, a conta é carregada na hora.
-- **Chave da Conta:** Você pode copiar seu código `AURA_...` e colar na caixa *Entrar em uma conta existente* em qualquer dispositivo.
-- **Backup JSON:** Exporte e importe saves em arquivo para segurança 100% offline.
+- **Continuar com o Google:** Abra a aba **📱 Conta** e clique em **Continuar com o Google**. Sua conta é vinculada via Google OAuth 2.0 sem precisar digitar nenhuma chave ou código.
+- **Troca Livre de Apelido:** Você pode definir ou mudar seu apelido no jogo a qualquer momento (de 2 a 20 caracteres), mantendo sua sincronização ativa.
+- **Backup em Arquivo (`.json`):** Também é possível baixar ou carregar uma cópia de segurança do progresso em formato `.json`.
 
-## Roleta da Sorte 67
+## Roleta da Sorte 67 & Missões Diárias
 
-Um minigame diário para manter você progredindo:
-- **Como ganhar giros:** 1 giro grátis no primeiro login de cada dia, +1 giro a cada subida de nível e +1 giro ao capturar o ladrão.
-- **Prêmios:** Fichas 67 (5, 10 ou 25), Rajadas de Aura Passiva instantânea (10 ou 15 minutos de produção) e Ativação do Modo Mega Brain (×7 por 67s)!
+Na aba **🎰 Roleta**, você acompanha em tempo real seus giros disponíveis, suas Fichas 67, sua Aura e seu Buff ativo:
+
+### Como ganhar giros (`+1 🎰`)
+- **🔥 Login Diário:** +1 giro grátis garantido no primeiro acesso de cada dia.
+- **🎯 Missões Diárias da Roleta:**
+  - *Aquecimento 6-7:* Dar 67 cliques no dia (`+1 🎰`)
+  - *Olhar Crítico:* Acertar 10 críticos no dia (`+1 🎰`)
+  - *Investidor de Aura:* Comprar 3 upgrades na loja no dia (`+1 🎰`)
+  - *Reflexo Rápido:* Pegar 1 Cérebro Dourado ou Ladrão no dia (`+1 🎰`)
+- **🚀 Subida de Rank & Conquistas:** +1 giro a cada nível alcançado e a cada conquista desbloqueada.
+
+### Os 10 Prêmios da Roleta
+| Prêmio | Efeito Creditado na Hora |
+|---|---|
+| 🎟 **5 Fichas 67** | +5 Fichas 67 para a loja de enfeites |
+| ⚡ **Rajada de Aura** | 3 minutos de farm passivo instantâneo |
+| 🎟 **10 Fichas 67** | +10 Fichas 67 para a loja de enfeites |
+| 🧠 **Mega Brain!** | Ativa ×7 em toda a aura por 67 segundos |
+| 🎟 **15 Fichas 67** | +15 Fichas 67 para a loja de enfeites |
+| 💥 **Tempestade 67** | 6 minutos de aura passiva instantânea |
+| 💎 **25 Fichas 67** | +25 Fichas 67 para a loja de enfeites |
+| 🚀 **Overdrive 67** | Ativa ×7 em toda a aura por 134 segundos (dobro de tempo!) |
+| 🌊 **Tsunami de Aura** | 10 minutos de aura passiva instantânea |
+| 👑 **Jackpot 67!** | +67 Fichas 67 na hora! |
 
 ## Níveis
 
+Cada nível concede **+10% em toda a aura**, e cada estrela de prestígio (⭐) soma **+25% permanentes**.
 
-A economia foi calibrada por simulação. Os tempos abaixo são de um jogador com 3 sessões de 40 minutos por dia, clicando 4 vezes por segundo e pegando os Cérebros Dourados. Quem joga menos chega um pouco depois, porque a aura passiva faz a maior parte do trabalho.
+| # | Nível | Aura total necessária | Efeito visual no palco |
+|--:|---|--:|---|
+| 0 | NPC | 0 | Nenhum |
+| 1 | Figurante | 66 mil | Brilho fraco |
+| 2 | Cria | 400 mil | Brilho mais forte |
+| 3 | Brabo | 1,8 mi | Sobrancelhas bravas |
+| 4 | O Pai Tá On | 17 mi | Corrente de ouro |
+| 5 | Main character | 28 mi | Holofote |
+| 6 | Sigma | 90 mi | Óculos escuros e fundo roxo |
+| 7 | Mega Brain | 270 mi | Cérebro gigante com sinapses |
+| 8 | Coop Thief | 390 mi | Saco de aura roubada e libera o evento do ladrão |
+| 9 | Aura infinita | 650 mi | Anel arco-íris |
+| 10 | Lenda do 6-7 | 1,2 bi | Coroa e fogo |
+| 11 | Ascendido | 4,6 bi | Asas e céu estrelado |
+| 12 | Deus do 6-7 | 15 bi | Clawd dourado, raios e tela tremendo |
+| 13 | Multiverso | 45 bi | Clones e um 67 gigante ao fundo |
+| 14 | Clawd Supremo | 98 bi | Cores da tela girando |
+| 15 | O Próprio 67 | 270 bi | Chuva de 67 e libera o botão **Renascer (⭐)** |
 
-| # | Nível | Aura total | Tempo aproximado | Efeito |
-|--:|---|--:|--:|---|
-| 0 | NPC | 0 | início | nenhum |
-| 1 | Figurante | 66 mil | 20 s | brilho fraco |
-| 2 | Cria | 400 mil | 1 min | brilho mais forte |
-| 3 | Brabo | 1,8 mi | 2,5 min | sobrancelhas bravas |
-| 4 | O Pai Tá On | 17 mi | 5 min | corrente de ouro |
-| 5 | Main character | 28 mi | 10 min | holofote |
-| 6 | Sigma | 90 mi | 20 min | óculos escuros e fundo roxo |
-| 7 | Mega Brain | 270 mi | 40 min | cérebro gigante com sinapses |
-| 8 | Coop Thief | 390 mi | 1,5 h | saco de aura roubada e o evento do ladrão |
-| 9 | Aura infinita | 650 mi | 3 h | anel arco-íris |
-| 10 | Lenda do 6-7 | 1,2 bi | 6 h | coroa e fogo |
-| 11 | Ascendido | 4,6 bi | 12 h | asas e céu estrelado |
-| 12 | Deus do 6-7 | 15 bi | 1 dia | Clawd dourado, raios e tela tremendo |
-| 13 | Multiverso | 45 bi | 40 h | clones e um 67 gigante ao fundo |
-| 14 | Clawd Supremo | 98 bi | 56 h | cores da tela girando |
-| 15 | O Próprio 67 | 270 bi | 3 dias | chuva de 67 |
+## Loja de Aura (8 Upgrades)
 
-Cada nível dá +10% em toda a aura, e cada prestígio mais +25%.
+Paga com aura. O preço de cada upgrade sobe exponencialmente a cada compra, somando **190 compras máximas** por vida:
 
-## Loja
-
-Paga com aura. O preço de cada upgrade sobe a cada compra, e completar todos leva cerca de 1 semana.
-
-| Upgrade | Efeito por compra | Preço inicial | Aumento por compra | Limite |
+| Upgrade | Efeito por compra | Preço inicial | Escalonamento | Limite |
 |---|---|--:|--:|--:|
-| Clawd auxiliar | +2 de aura por segundo | 50 | ×1,18 | 40 |
-| Mão firme | +50% de aura por clique | 200 | ×1,3 | 30 |
-| Olhar sigma | +3% de chance de crítico | 5 mil | ×2,2 | 10 |
-| Fábrica de 67 | +60 de aura por segundo | 20 mil | ×1,22 | 30 |
-| Datacenter do Clawd | +4.000 de aura por segundo | 20 mi | ×1,25 | 30 |
-| Aura cósmica | dobra toda a aura | 3,2 bi | ×5 | 5 |
+| **Clawd auxiliar** | +1 de aura por segundo | 150 | ×1,25 | 40 |
+| **Mão firme** | +25% de aura por clique | 600 | ×1,38 | 30 |
+| **Olhar sigma** | +2% de chance de crítico | 15 mil | ×2,50 | 10 |
+| **Fábrica de 67** | +20 de aura por segundo | 80 mil | ×1,28 | 30 |
+| **Datacenter do Clawd** | +250 de aura por segundo | 60 mi | ×1,32 | 30 |
+| **IA Quântica 67** | +1.200 de aura por segundo | 800 mi | ×1,38 | 25 |
+| **Portal Multiversal** | +3.500/s e +15% no clique | 12 bi | ×1,42 | 20 |
+| **Aura cósmica** | +50% em toda a aura (`×1,5`) | 25 bi | ×6,00 | 5 |
 
-## Eventos, conquistas e enfeites
+## Eventos, conquistas e enfeites (36 itens)
 
-| Evento | Quando | O que dá |
+| Evento | Quando aparece | O que concede |
 |---|---|---|
-| Cérebro Dourado | a cada 3 a 8 min, fica 13 s na tela | Modo Mega Brain: ×7 em toda a aura por 67 s |
-| Ladrão | a partir do nível 8, a cada 4 a 10 min, fica 8 s na tela | 3 Fichas 67 |
-| Login diário | primeiro acesso do dia (horário de Brasília) | 5 fichas × dias seguidos, até 35 |
-| Combo | clicando mais de 3 vezes por segundo | até ×3 por clique, a 12 cliques/s |
+| **Cérebro Dourado** | A cada 3 a 8 min (13 s na tela) | Modo Mega Brain: ×7 em toda a aura por 67 s + avança missão diária |
+| **Ladrão** | A partir do nível 8, a cada 4 a 10 min (8 s na tela) | Recupera 1 min de aura passiva + conta para conquistas e missão diária |
+| **Login Diário** | Primeiro acesso do dia (horário de Brasília) | +1 giro grátis na Roleta da Sorte + sequência de dias |
+| **Combo** | Clicando mais de 3 vezes por segundo | Multiplicador de até ×3 por clique (a 12 cliques/s) |
 
-As **15 conquistas** vão de "Seis sete" (67 cliques) a "Uma semana de aura" (7 dias seguidos) e dão de 5 a 50 fichas cada. A lista fica em [`src/achievements.ts`](src/achievements.ts).
+- **15 Conquistas (`src/achievements.ts`):** De *"Seis sete"* (67 cliques) a *"Uma semana de aura"* (7 dias seguidos), concedendo de **5 a 50 Fichas 67** e **+1 giro na Roleta** cada.
+- **36 Enfeites (`src/cosmetics.ts`):** Divididos em 5 categorias (pagos exclusivamente com Fichas 67):
+  - **Fundos (8):** *Favela neon*, *Praia de Copacabana*, *Sala de servidores*, *Cidade Cyberpunk*, *Espaço sideral*, *Vulcão de Aura*, *Matrix 67* e *Buraco Negro*.
+  - **Chapéus (8):** *Boné aba reta*, *Elmo Viking*, *Headset RGB*, *Cartola Magnata*, *Coroa de ouro*, *Auréola Divina*, *Chifres de Fogo* e *Capacete Mega Brain*.
+  - **Rosto (7):** *Bigodão*, *Óculos 3D*, *Óculos Juliet*, *Máscara Ninja*, *Visor Laser*, *Visor Ciborgue* e *Olhos de Fogo*.
+  - **Roupa (7):** *Camisa da seleção*, *Moletom Drip 67*, *Capa de herói*, *Manto Real*, *Terno de CEO*, *Armadura Mecha* e *Asas de Anjo*.
+  - **Cor (6):** *Clawd Camuflado*, *Clawd neon*, *Clawd Rubi*, *Clawd dourado*, *Clawd Diamante* e *Clawd Sombra*.
 
-A **loja de enfeites** tem 16 itens em 5 categorias (fundo, chapéu, rosto, roupa e cor), de 15 a 120 fichas. Entre eles estão a Favela neon, a Praia de Copacabana, o Capacete Mega Brain, os Óculos Juliet e a Camisa da seleção. O catálogo fica em [`src/cosmetics.ts`](src/cosmetics.ts).
+## Prestígio (Renascer ⭐)
 
-## Ranking e segurança
+Ao alcançar o nível 15 (*O Próprio 67*), o botão **✨ Renascer** aparece:
+- **Zera a vida atual:** sua Aura atual volta a `0`, o nível volta para `NPC` e todos os 8 upgrades da Loja voltam a `0/máx`.
+- **Ganha +1 Estrela (⭐):** concede **+25% permanentes** em toda a aura gerada em todas as vidas futuras.
+- **Preserva conquistas e coleção:** suas Fichas 67, seus Enfeites comprados/equipados, suas Conquistas e sua Aura Vitalícia no Ranking Global permanecem intactos.
 
-No modo online, **quem calcula tudo é o servidor**. O navegador nunca envia "tenho X de aura" ou "tenho Y fichas": ele envia só eventos ("cliquei", "peguei o cérebro", "comprei tal item"), e o banco aplica as mesmas regras do jogo.
+## Ranking em tempo real e segurança
 
-- Cliques são limitados a 15 por segundo, com rajada de até 60, e o combo vem da taxa que o servidor mede.
-- Aura passiva, Cérebro Dourado, ladrão e login diário usam o relógio do servidor. O cérebro e o ladrão só valem dentro da janela em que aparecem.
-- Críticos são rolados no servidor.
-- Fichas, conquistas e enfeites também são do servidor: não dá para comprar sem saldo, equipar o que não tem ou ganhar a mesma conquista duas vezes.
-- A tabela não pode ser lida nem alterada diretamente pela API. Tudo passa por funções que conferem o segredo do jogador.
-- Apelidos são validados no servidor e exibidos como texto, nunca como HTML. Os enfeites de outros jogadores só são desenhados se existirem no catálogo do jogo.
-- O site publicado tem Content Security Policy: só roda scripts do próprio site e só conversa com o Supabase.
+- **Ranking ao vivo:** mostra a posição, o avatar customizado do Clawd com todos os enfeites equipados, o título do nível, as estrelas de prestígio (⭐) e a aura vitalícia de cada jogador.
+- **Sincronização Realtime:** mudanças de roupa/enfeites, estrelas de prestígio e aura vitalícia são transmitidas em tempo real entre os jogadores conectados via Supabase Realtime (Presence + Broadcast).
+- **Segurança no servidor (`supabase/schema.sql`):** RLS ativado na tabela `aura_players`, funções `security definer` com validação por hash SHA-256 do segredo da conta, limite de cliques anti-autoclicker e sanitização de apelidos e SVGs.
 
-Os detalhes e os limites conhecidos estão em [SECURITY.md](SECURITY.md).
-
-Sem o Supabase configurado, o jogo funciona offline, com o progresso salvo só no navegador e sem ranking.
+Os detalhes de segurança estão em [SECURITY.md](SECURITY.md).
 
 ## Rodando localmente
 
@@ -169,12 +184,12 @@ npm run dev
 
 | Comando | O que faz |
 |---|---|
-| `npm run dev` | servidor de desenvolvimento com recarga automática |
-| `npm test` | roda os testes das regras do jogo (Vitest) |
-| `npm run build` | checa os tipos e gera o site estático em `dist/` |
-| `npm run preview` | serve o `dist/` localmente para conferir o build |
+| `npm run dev` | Servidor de desenvolvimento com recarga automática |
+| `npm test` | Roda as 4 suítes de testes automatizados (Vitest: 41 testes) |
+| `npm run build` | Checa os tipos TypeScript (`tsc --noEmit`) e gera o site estático em `dist/` |
+| `npm run preview` | Serve a pasta `dist/` localmente para conferir o build de produção |
 
-Para rodar os testes do servidor com Docker:
+Para rodar os testes SQL do servidor com Docker:
 
 ```bash
 docker run -d --rm --name aura-pg -e POSTGRES_PASSWORD=pg postgres:17-alpine
@@ -184,95 +199,64 @@ cat supabase/test-setup.sql supabase/schema.sql supabase/test.sql \
 
 ## Configurando o ranking (Supabase)
 
-1. Crie um projeto grátis em [supabase.com](https://supabase.com/).
-2. No **SQL Editor**, cole e rode o conteúdo de [`supabase/schema.sql`](supabase/schema.sql).
+1. Crie um projeto em [supabase.com](https://supabase.com/).
+2. No **SQL Editor**, cole e execute o conteúdo de [`supabase/schema.sql`](supabase/schema.sql).
 3. Em **Project Settings → API**, copie a **Project URL** e a chave **anon public**.
-4. Para rodar localmente, copie `.env.example` para `.env.local` e preencha os dois valores.
-5. Para o site publicado, crie as variáveis `SUPABASE_URL` e `SUPABASE_ANON_KEY` em **Settings → Secrets and variables → Actions → Variables** do repositório.
-
-A chave anon é pública por design e pode ficar no site. **Nunca** use a chave `service_role` no front-end.
+4. Configure as variáveis `SUPABASE_URL`, `SUPABASE_ANON_KEY` e `GOOGLE_CLIENT_ID` em **Settings → Secrets and variables → Actions** do repositório no GitHub.
 
 ## Painel dev
 
-Com `npm run dev`, aparece um botão 🛠 no canto inferior esquerdo. Ele abre um painel para testar o jogo sem farmar:
-
-- subir e descer de nível, ou pular direto para qualquer um;
-- ganhar aura e Fichas 67, completar a loja e liberar todos os enfeites;
-- forçar o Cérebro Dourado e o ladrão;
-- simular um novo dia (login diário) e ir ao nível máximo (prestígio);
-- zerar tudo.
-
-O painel **não existe no build de produção**: o Vite remove o código, então ninguém consegue usá-lo no site publicado. Se o ranking estiver configurado, o painel entra em **modo sandbox** e para de sincronizar, para nunca alterar o servidor.
+Em ambiente de desenvolvimento (`npm run dev`), um botão 🛠 aparece no canto inferior esquerdo permitindo testar níveis, eventos, loja e prestígio rapidamente. O painel é removido automaticamente no build de produção (`npm run build`).
 
 ## Estrutura do projeto
 
-```
+```text
 .
-├── index.html               # marcação: palco, mascote em SVG, HUD, loja e ranking
-├── public/favicon.svg       # ícone do jogo
+├── index.html               # Marcação principal: palco, mascote SVG, HUD, loja e modais
+├── public/
+│   ├── favicon.svg          # Ícone do jogo
+│   └── manifest.json        # Manifesto PWA para instalação no celular
 ├── src/
-│   ├── main.ts              # liga o DOM às regras: render, cliques, eventos, menu
-│   ├── game.ts              # regras puras: níveis, ganhos, combo, eventos, prestígio
-│   ├── achievements.ts      # conquistas
-│   ├── cosmetics.ts         # catálogo e desenhos dos enfeites
-│   ├── mini.ts              # mini Clawd com enfeites (prévia e ranking)
-│   ├── dev.ts               # painel dev (só em npm run dev)
-│   ├── game.test.ts         # testes das regras, incluindo paridade com o servidor
-│   ├── schema-sync.test.ts  # falha se game.ts e schema.sql divergirem
-│   ├── online.ts            # cliente do Supabase: envio de eventos em lote e ranking
-│   ├── storage.ts           # save local e identidade do jogador
-│   ├── sound.ts             # efeitos sonoros com Web Audio
-│   ├── fx.ts                # efeitos em Canvas: partículas, fogo, raios, estrelas
-│   └── style.css            # visual e efeitos por nível (classes l1 a l10)
+│   ├── main.ts              # Integração de estado, DOM, áudio, OAuth2, Roleta e Ranking
+│   ├── game.ts              # Regras do jogo: níveis, 8 upgrades, combo, eventos e prestígio
+│   ├── wheel.ts             # Roleta da Sorte 67 (10 fatias, login diário e 4 missões diárias)
+│   ├── achievements.ts      # 15 conquistas com progresso e recompensas em Fichas 67
+│   ├── cosmetics.ts         # Catálogo de 36 enfeites em pixel art SVG (5 categorias)
+│   ├── mini.ts              # Renderizador de miniaturas SVG do Clawd para prévia e ranking
+│   ├── online.ts            # Cliente Supabase RPC + canal Realtime de cosméticos e ranking
+│   ├── storage.ts           # Persistência local, Google OAuth 2.0, cofre de conta e backup JSON
+│   ├── sound.ts             # Sintetizador de efeitos sonoros 8-bit via Web Audio API
+│   ├── fx.ts                # Partículas, raios e efeitos visuais em Canvas 2D
+│   ├── style.css            # Estilos responsivos (mobile-first), animações e temas de fundo
+│   ├── dev.ts               # Painel de testes (exclusivo para npm run dev)
+│   ├── game.test.ts         # Testes de regras, loja, níveis, eventos e paridade com SQL
+│   ├── wheel.test.ts        # Testes da Roleta da Sorte 67 e missões diárias
+│   ├── storage.test.ts      # Testes de persistência, sanitização e backup JSON
+│   └── schema-sync.test.ts  # Garante paridade exata entre src/game.ts e supabase/schema.sql
 ├── supabase/
-│   ├── schema.sql           # tabela, regras do jogo no servidor e permissões
-│   ├── test.sql             # testes do servidor (permissões, limites, eventos, paridade)
-│   └── test-setup.sql       # papéis do Supabase para testar num Postgres puro
+│   ├── schema.sql           # Tabela, funções RPC (aura_sync, aura_top, aura_around) e RLS
+│   ├── test.sql             # Suite de testes SQL executada no Postgres via GitHub Actions
+│   └── test-setup.sql       # Configuração de roles para testes SQL no CI
 ├── .github/
-│   ├── workflows/deploy.yml # testes, build e publicação no GitHub Pages
-│   └── dependabot.yml       # atualização semanal de dependências
-├── vite.config.ts           # build e Content Security Policy
+│   └── workflows/deploy.yml # Pipeline CI/CD: testes SQL + Vitest + build + deploy GitHub Pages
+├── vite.config.ts           # Configuração do Vite e Content Security Policy (CSP)
 └── tsconfig.json
 ```
 
-| Camada | Tecnologia |
-|---|---|
-| Linguagem e build | TypeScript + [Vite](https://vite.dev/) |
-| Testes | [Vitest](https://vitest.dev/) e SQL no Postgres |
-| Servidor do ranking | [Supabase](https://supabase.com/) (Postgres + PostgREST), sem SDK |
-| Mascote | SVG em pixel art |
-| Animações e efeitos | CSS e Canvas 2D |
-| Som | Web Audio API |
-| Fontes | [Pixelify Sans](https://fonts.google.com/specimen/Pixelify+Sans) e [VT323](https://fonts.google.com/specimen/VT323) (Google Fonts) |
-
-O jogo não tem dependências em produção: o build gera só HTML, CSS e JavaScript estáticos.
-
 ## Deploy
 
-A cada push na `main`, o GitHub Actions roda os testes do servidor e do jogo, gera o build e publica o `dist/` no GitHub Pages. Pull Requests também rodam testes e build, mas não publicam.
-
-Na primeira vez, mude a fonte do Pages para **GitHub Actions** em **Settings → Pages → Source**.
+A cada push na branch `main`, o workflow [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) executa os testes SQL no Postgres 17, roda os 41 testes unitários no Vitest, compila o projeto com Vite e publica automaticamente no GitHub Pages (`https://eugabrielnolasco.github.io/clawd-aura-farm/`).
 
 ## Contribuindo
 
-Contribuições são bem-vindas.
-
 1. Faça um fork do repositório.
 2. Instale as dependências com `npm install` e crie uma branch: `git checkout -b minha-feature`.
-3. Confira se `npm test` e `npm run build` passam e faça o commit: `git commit -m "Adiciona minha feature"`.
-4. Envie a branch: `git push origin minha-feature`.
-5. Abra um Pull Request.
-
-Mudou alguma regra do jogo em `src/game.ts`, `src/achievements.ts` ou `src/cosmetics.ts`? Espelhe a mudança em `supabase/schema.sql`, senão o ranking diverge do que o jogador vê. O `src/schema-sync.test.ts` e os testes de paridade avisam quando isso acontece.
-
-Bugs e sugestões podem ser enviados pelas [issues](https://github.com/EuGabrielNolasco/clawd-aura-farm/issues). Para falhas de segurança, veja o [SECURITY.md](SECURITY.md).
+3. Verifique se `npm test` e `npm run build` passam sem erros.
+4. Caso altere constantes em `src/game.ts`, `src/achievements.ts` ou `src/cosmetics.ts`, espelhe em `supabase/schema.sql` (`src/schema-sync.test.ts` valida a sincronia automaticamente).
+5. Envie sua branch e abra um Pull Request.
 
 ## Licença
 
 O código está sob a licença [MIT](LICENSE).
 
 > **Aviso:** este é um projeto de fã, sem vínculo oficial com a Anthropic. O nome Claude e o personagem Clawd são propriedade da Anthropic e não estão cobertos pela licença MIT.
-
----
-
-Desenvolvido com o [Claude Code](https://claude.com/claude-code).
