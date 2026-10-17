@@ -197,9 +197,9 @@ describe("loja", () => {
 
   it("aplica os efeitos dos upgrades", () => {
     const s = newState();
-    s.upgrades = { aux: 2, click: 2, crit: 5, fab: 1, dc: 1, ia: 1, portal: 1, cosmic: 1 };
-    expect(passivePerSecond(s)).toBe((2 + 4 + 60 + 4000 + 150000 + 5000000) * 2);
-    expect(clickGain(s)).toBe(67 * 3 * 2);
+    s.upgrades = { aux: 2, click: 2, crit: 5, fab: 1, dc: 1, cosmic: 1 };
+    expect(passivePerSecond(s)).toBe((2 + 4 + 60 + 4000) * 2);
+    expect(clickGain(s)).toBe(67 * 2 * 2);
     expect(critChance(s)).toBeCloseTo(0.25);
   });
 

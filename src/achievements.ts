@@ -73,7 +73,7 @@ export function achievementProgress(a: Achievement, s: State, level: number, sho
       current = level; target = 15; label = `Nível ${Math.min(current, target)} / 15`; break;
     case "shop_full":
       current = Object.values(s.upgrades).reduce((acc, v) => acc + v, 0);
-      target = 40 + 30 + 10 + 30 + 30 + 25 + 20 + 5; // 190 upgrades no total
+      target = 40 + 30 + 10 + 30 + 30 + 5; // 145 upgrades no total
       label = `${current} / ${target} itens`;
       break;
     case "golden_1":

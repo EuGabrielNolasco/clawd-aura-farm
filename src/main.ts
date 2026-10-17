@@ -3,7 +3,7 @@ import { ACHIEVEMENTS, achievementProgress, checkAchievements } from "./achievem
 import { COSMETICS, cosmeticById, SLOTS, type Slot } from "./cosmetics";
 import {
   allMaxed, applyEvent, buffActive, canBuy, canPrestige, clickGain, comboFor, costOf, daily, EV,
-  goldenVisible, isMaxed, LEVEL_BONUS, levelOf, LV, mult, nowSec, parseEvents, passive, passivePerSecond,
+  goldenVisible, isMaxed, LEVEL_BONUS, levelOf, LV, nowSec, parseEvents, passive, passivePerSecond,
   PRESTIGE_BONUS, RANKS, schedule, thiefVisible, THIEF, todayBR, UPGRADES, type State,
 } from "./game";
 import { createFx, reduceMotion } from "./fx";
@@ -12,9 +12,8 @@ import { createSync, fetchPlayerState, onlineEnabled, toState, type RankRow, typ
 import { generateQrSvg } from "./qr";
 import { sfx, setMuted } from "./sound";
 import {
-  accountShareUrl, derivePlayerFromCredentials, exportAccountToken, exportSaveJson, importSaveJson,
-  load, loadLinkedAccount, loadMuted, normalizeIdentifier, parseAccountToken, player, PROVIDER_LABELS,
-  sanitize, save, saveLinkedAccount, saveMuted, savePlayer, type AuthProvider, type Player,
+  accountShareUrl, exportAccountToken, exportSaveJson, importSaveJson,
+  load, loadMuted, parseAccountToken, player, sanitize, save, saveMuted, savePlayer, type Player,
 } from "./storage";
 import { addSpin, loadSpins, renderWheelSvg, spinWheel } from "./wheel";
 
@@ -104,47 +103,9 @@ function saveLocalCos(lc: LocalCosState) {
 }
 const localCos = loadLocalCos();
 
-const LOCAL_EXT_KEY = "clawd-aura-farm:ext-ups-v1";
-interface LocalExtState {
-  ia: number;
-  portal: number;
-  cosmic: number;
-  bonusAura: number;
-  spentAura: number;
-}
-function loadLocalExt(): LocalExtState {
-  try {
-    const raw = JSON.parse(localStorage.getItem(LOCAL_EXT_KEY) || "null");
-    if (raw && typeof raw === "object") {
-      return {
-        ia: Math.max(0, Math.floor(Number(raw.ia) || 0)),
-        portal: Math.max(0, Math.floor(Number(raw.portal) || 0)),
-        cosmic: Math.max(0, Math.floor(Number(raw.cosmic) || 0)),
-        bonusAura: Math.max(0, Number(raw.bonusAura) || 0),
-        spentAura: Math.max(0, Number(raw.spentAura) || 0),
-      };
-    }
-  } catch { /* ignore */ }
-  return { ia: state.upgrades.ia, portal: state.upgrades.portal, cosmic: state.upgrades.cosmic, bonusAura: 0, spentAura: 0 };
-}
-function saveLocalExt(ext: LocalExtState) {
-  try { localStorage.setItem(LOCAL_EXT_KEY, JSON.stringify(ext)); } catch { /* ignore */ }
-}
-const localExt = loadLocalExt();
-
 function onServer(r: ServerState, pending: string) {
   clockOffset = r.now - nowSec();
   state = toState(r);
-
-  // Se o servidor remoto ainda retornar array de 6 posições, mescla os 2 novos upgrades e a aura extra gerada
-  if (r.ups.length < 8) {
-    state.upgrades.ia = Math.max(state.upgrades.ia, localExt.ia);
-    state.upgrades.portal = Math.max(state.upgrades.portal, localExt.portal);
-    state.upgrades.cosmic = Math.max(state.upgrades.cosmic, localExt.cosmic);
-    state.aura = Math.max(0, state.aura + localExt.bonusAura - localExt.spentAura);
-    state.total += localExt.bonusAura;
-    state.lifetime += localExt.bonusAura;
-  }
 
   // Mescla enfeites comprados localmente que o banco remoto ainda não tenha registrado
   for (const id of localCos.owned) {
@@ -221,37 +182,7 @@ function achievementUnlocked(id: string) {
 
 /** Aplica um evento local e, no modo online, manda para o servidor. */
 function act(code: string, arg = "") {
-  const prevAura = state.aura;
-  const prevIa = state.upgrades.ia;
-  const prevPortal = state.upgrades.portal;
-  const prevCosmic = state.upgrades.cosmic;
   const r = applyEvent(state, code, arg, combo(), now());
-  if (code === EV.prestige || code === EV.reset) {
-    localExt.ia = 0;
-    localExt.portal = 0;
-    localExt.cosmic = 0;
-    localExt.bonusAura = 0;
-    localExt.spentAura = 0;
-    saveLocalExt(localExt);
-  } else if (code === "i" && state.upgrades.ia > prevIa) {
-    localExt.ia = state.upgrades.ia;
-    localExt.spentAura += prevAura - state.aura;
-    saveLocalExt(localExt);
-    save(state);
-  } else if (code === "o" && state.upgrades.portal > prevPortal) {
-    localExt.portal = state.upgrades.portal;
-    localExt.spentAura += prevAura - state.aura;
-    saveLocalExt(localExt);
-    save(state);
-  } else if (code === "x" && state.upgrades.cosmic > prevCosmic) {
-    localExt.cosmic = state.upgrades.cosmic;
-    saveLocalExt(localExt);
-    save(state);
-  } else if (code === EV.click && r && state.upgrades.portal > 0) {
-    const portalShare = (1.0 * state.upgrades.portal) / (1 + 0.5 * state.upgrades.click + 1.0 * state.upgrades.portal);
-    localExt.bonusAura += r.gain * portalShare;
-    saveLocalExt(localExt);
-  }
   if (code === EV.buyCosmetic || code === EV.equip || code === EV.unequip) {
     for (const id of state.owned) {
       if (!localCos.owned.includes(id)) localCos.owned.push(id);
@@ -473,13 +404,7 @@ function localTick() {
 let lastTick = performance.now();
 setInterval(() => {
   const t = performance.now();
-  const dt = (t - lastTick) / 1000;
-  passive(state, dt, now());
-  if (state.upgrades.ia > 0 || state.upgrades.portal > 0) {
-    const extraRate = (150000 * state.upgrades.ia + 5000000 * state.upgrades.portal) * mult(state) * (buffActive(state, now()) ? 7 : 1);
-    localExt.bonusAura += extraRate * Math.min(dt, 10);
-    saveLocalExt(localExt);
-  }
+  passive(state, (t - lastTick) / 1000, now());
   lastTick = t;
   if (!sync) localTick();
   render();
@@ -562,17 +487,6 @@ function renderAccount() {
   $("acc-id-short").textContent = `ID: ...${activePlayer.id.slice(-6)}`;
   $("acc-rank-label").textContent = lastRank ? `#${lastRank} no ranking` : "Sem apelido no ranking";
 
-  const linked = loadLinkedAccount();
-  const linkedBadge = $("acc-linked-badge");
-  if (linkedBadge) {
-    if (linked) {
-      linkedBadge.hidden = false;
-      linkedBadge.textContent = `🔗 Vinculado a ${PROVIDER_LABELS[linked.provider]}: ${linked.identifier}`;
-    } else {
-      linkedBadge.hidden = true;
-    }
-  }
-
   const shareUrl = accountShareUrl(activePlayer);
   const qrContainer = $("acc-qr");
   if (qrContainer) {
@@ -601,7 +515,7 @@ function renderStats() {
     { label: "Ladrões Capturados", val: String(state.thieves) },
     { label: "Sequência de Dias", val: `${state.streak} dias` },
     { label: "Fichas 67 Disponíveis", val: String(state.tokens) },
-    { label: "Upgrades Comprados", val: `${totalBought}/190` },
+    { label: "Upgrades Comprados", val: `${totalBought}/145` },
     { label: "Conquistas Concluídas", val: `${state.achievements.length}/${ACHIEVEMENTS.length}` },
     { label: "Enfeites Possuídos", val: `${state.owned.length}/${COSMETICS.length}` },
     { label: "Sincronização", val: onlineEnabled ? "🟢 Supabase" : "🟡 Local" },
@@ -779,104 +693,7 @@ for (const b of document.querySelectorAll<HTMLElement>(".subtabs [data-list]")) 
   b.addEventListener("click", () => { list = b.dataset.list as typeof list; void loadRanking(); });
 }
 
-// ===== eventos da conta & sincronização (Google, Facebook, Número, Apple ID) =====
-let selectedProvider: AuthProvider = "google";
-
-const PROVIDER_UI: Record<AuthProvider, { label: string; placeholder: string; type: string }> = {
-  google: { label: "E-mail da conta Google (Gmail)", placeholder: "seuemail@gmail.com", type: "email" },
-  facebook: { label: "E-mail ou usuário do Facebook", placeholder: "seuemail@facebook.com", type: "text" },
-  phone: { label: "Seu Número com DDD (WhatsApp / Celular)", placeholder: "(11) 99999-9999", type: "tel" },
-  apple: { label: "Seu Apple ID (iCloud)", placeholder: "seuemail@icloud.com", type: "email" },
-};
-
-function selectSocialProvider(p: AuthProvider) {
-  selectedProvider = p;
-  for (const btn of document.querySelectorAll<HTMLElement>(".social-btn[data-provider]")) {
-    btn.classList.toggle("active", btn.dataset.provider === p);
-  }
-  const cfg = PROVIDER_UI[p];
-  const lbl = $("social-id-label");
-  const inp = $<HTMLInputElement>("social-id-input");
-  const waBtn = $("whatsapp-share-btn");
-  if (lbl) lbl.textContent = cfg.label;
-  if (inp) {
-    inp.placeholder = cfg.placeholder;
-    inp.type = cfg.type;
-  }
-  if (waBtn) waBtn.hidden = p !== "phone";
-  const msg = $("social-sync-msg");
-  if (msg) msg.textContent = "";
-}
-
-for (const btn of document.querySelectorAll<HTMLElement>(".social-btn[data-provider]")) {
-  btn.addEventListener("click", () => selectSocialProvider(btn.dataset.provider as AuthProvider));
-}
-
-const existingLinked = loadLinkedAccount();
-if (existingLinked) {
-  selectSocialProvider(existingLinked.provider);
-  const inp = $<HTMLInputElement>("social-id-input");
-  if (inp) inp.value = existingLinked.identifier;
-}
-
-$("whatsapp-share-btn")?.addEventListener("click", () => {
-  const rawPhone = $<HTMLInputElement>("social-id-input")?.value.trim() || "";
-  const url = accountShareUrl(activePlayer);
-  const text = encodeURIComponent(`🔥 Meu link de sincronização do Clawd Aura Farm:\n${url}`);
-  const digits = rawPhone ? normalizeIdentifier("phone", rawPhone) : "";
-  const waUrl = digits.length >= 12 ? `https://wa.me/${digits}?text=${text}` : `https://wa.me/?text=${text}`;
-  window.open(waUrl, "_blank", "noopener");
-});
-
-$<HTMLFormElement>("social-sync-form")?.addEventListener("submit", async e => {
-  e.preventDefault();
-  const idInput = $<HTMLInputElement>("social-id-input");
-  const pinInput = $<HTMLInputElement>("social-pin-input");
-  const msg = $("social-sync-msg");
-  const idVal = idInput.value.trim();
-  const pinVal = pinInput.value.trim();
-
-  const targetPlayer = await derivePlayerFromCredentials(selectedProvider, idVal, pinVal);
-  if (!targetPlayer) {
-    msg.textContent = "Preencha um identificador válido e uma senha/PIN de pelo menos 4 caracteres.";
-    return;
-  }
-
-  const label = PROVIDER_LABELS[selectedProvider];
-  msg.textContent = `Sincronizando conta com ${label}…`;
-  try {
-    if (onlineEnabled) {
-      const prevName = myName;
-      const serverData = await fetchPlayerState(targetPlayer);
-      activePlayer = targetPlayer;
-      savePlayer(activePlayer);
-      saveLinkedAccount({ provider: selectedProvider, identifier: idVal });
-      sync?.setPlayer(activePlayer);
-      onServer(serverData, "");
-      if (!serverData.name && prevName) {
-        try {
-          await sync?.setName(prevName);
-          await sync?.flush();
-        } catch { /* apelido já em uso na outra conta */ }
-      }
-      msg.textContent = `✅ Conta vinculada e sincronizada via ${label}! Use os mesmos dados no outro aparelho.`;
-      toast(`🎉 Conta sincronizada com ${label}!`);
-      pinInput.value = "";
-      renderAccount();
-    } else {
-      activePlayer = targetPlayer;
-      savePlayer(activePlayer);
-      saveLinkedAccount({ provider: selectedProvider, identifier: idVal });
-      msg.textContent = `✅ Conta vinculada a ${label}!`;
-      toast(`🎉 Conta vinculada a ${label}!`);
-      pinInput.value = "";
-      renderAccount();
-    }
-  } catch (err) {
-    msg.textContent = "Erro ao sincronizar: " + (err as Error).message;
-  }
-});
-
+// ===== eventos da conta & sincronização =====
 $("copy-sync-link")?.addEventListener("click", async () => {
   try {
     await navigator.clipboard.writeText(accountShareUrl(activePlayer));

@@ -69,18 +69,4 @@ describe("storage e sincronização de contas", () => {
     expect(clean.tokens).toBe(10);
     expect(clean.upgrades.aux).toBe(40);
   });
-
-  it("deriva a mesma conta para Google, Facebook, Número ou Apple ID em aparelhos diferentes", async () => {
-    const { derivePlayerFromCredentials } = await import("./storage");
-    const g1 = await derivePlayerFromCredentials("google", "Gabriel@Gmail.com ", "123456");
-    const g2 = await derivePlayerFromCredentials("google", "gabriel@gmail.com", "123456");
-    expect(g1).not.toBeNull();
-    expect(g1).toEqual(g2);
-
-    const p1 = await derivePlayerFromCredentials("phone", "(11) 98765-4321", "minhasenha");
-    const p2 = await derivePlayerFromCredentials("phone", "11987654321", "minhasenha");
-    expect(p1).not.toBeNull();
-    expect(p1).toEqual(p2);
-    expect(p1!.id).not.toBe(g1!.id);
-  });
 });

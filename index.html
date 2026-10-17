@@ -193,59 +193,28 @@
         <div class="acc-info">
           <h3 id="acc-name">Jogador Anônimo</h3>
           <p id="acc-status" class="acc-badge">🟢 Conectado na Nuvem</p>
-          <p id="acc-linked-badge" class="acc-linked" hidden></p>
           <p class="acc-meta"><small id="acc-id-short">ID: ...</small> · <small id="acc-rank-label">Sem ranking</small></p>
         </div>
       </div>
 
-      <div class="acc-box highlight social-auth-box">
-        <h4>🔐 Sincronizar com Google, Facebook, Número ou Apple ID</h4>
-        <p class="acc-desc">Vincule sua conta para entrar em qualquer celular ou PC usando seu login e uma senha/PIN:</p>
-        <div class="social-btns" role="group" aria-label="Escolha onde sincronizar sua conta">
-          <button type="button" class="social-btn google active" data-provider="google">
-            <span class="social-icon">G</span> <span>Google</span>
-          </button>
-          <button type="button" class="social-btn facebook" data-provider="facebook">
-            <span class="social-icon">f</span> <span>Facebook</span>
-          </button>
-          <button type="button" class="social-btn phone" data-provider="phone">
-            <span class="social-icon">📱</span> <span>Número</span>
-          </button>
-          <button type="button" class="social-btn apple" data-provider="apple">
-            <span class="social-icon"></span> <span>Apple ID</span>
-          </button>
-        </div>
-        <form id="social-sync-form" class="social-form">
-          <label for="social-id-input" id="social-id-label">E-mail da conta Google (Gmail)</label>
-          <input id="social-id-input" type="email" placeholder="seuemail@gmail.com" required autocomplete="username">
-          <label for="social-pin-input">Senha ou PIN de Sincronização (mín. 4 caracteres)</label>
-          <div class="name-row">
-            <input id="social-pin-input" type="password" minlength="4" placeholder="Crie ou digite sua senha/PIN" required autocomplete="current-password">
-            <button type="submit" class="btn-accent" id="social-submit-btn">Sincronizar</button>
-          </div>
-          <button type="button" id="whatsapp-share-btn" class="btn-whatsapp" hidden>💬 Enviar Link da Conta para este WhatsApp</button>
-          <p class="name-msg" id="social-sync-msg" role="status"></p>
-        </form>
-      </div>
-
-      <div class="acc-box">
-        <h4>📲 QR Code e Link Rápido (PC ↔ Celular)</h4>
-        <p class="acc-desc">Ou aponte a câmera do celular para abrir sua conta direto:</p>
+      <div class="acc-box highlight">
+        <h4>📲 Jogar no PC e Celular com a mesma conta</h4>
+        <p class="acc-desc">Abra no outro aparelho e continue exatamente de onde parou!</p>
         <div class="sync-options">
           <div class="qr-wrap" id="acc-qr-wrap">
             <div id="acc-qr" class="qr-canvas"></div>
-            <p><small>📷 Aponte a câmera do celular</small></p>
+            <p><small>📷 Aponte a câmera do celular para abrir esta conta direto</small></p>
           </div>
           <div class="sync-actions">
             <button type="button" id="copy-sync-link" class="btn-accent">📋 Copiar Link de Acesso Direto</button>
             <button type="button" id="copy-sync-token" class="btn-secondary">🔑 Copiar Chave da Conta</button>
-            <p class="sync-tip"><small>Envie o link para você mesmo e clique nele no PC ou celular.</small></p>
+            <p class="sync-tip"><small>Envie o link para você mesmo (WhatsApp, Telegram ou e-mail) e clique nele no PC ou celular.</small></p>
           </div>
         </div>
       </div>
 
       <div class="acc-box">
-        <h4>🔄 Entrar com Chave ou Link</h4>
+        <h4>🔄 Entrar em uma conta existente</h4>
         <p class="acc-desc">Cole a chave ou o link copiado do outro aparelho para sincronizar:</p>
         <form id="import-account-form" class="acc-form">
           <div class="name-row">
