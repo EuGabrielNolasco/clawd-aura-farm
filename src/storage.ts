@@ -164,15 +164,34 @@ export function parseSyncPayload(input: string): { player: Player; state?: Parti
  */
 export function mergeStates(local: State, remote: Partial<State>): State {
   const merged = { ...local };
-  if (typeof remote.lifetime === "number" && remote.lifetime > local.lifetime) {
-    merged.lifetime = remote.lifetime;
+  const remPrestige = typeof remote.prestige === "number" ? remote.prestige : local.prestige;
+
+  if (remPrestige > local.prestige) {
+    // O progresso remoto está em uma vida de prestígio mais avançada: adota a nova vida
+    merged.prestige = remPrestige;
+    merged.total = remote.total ?? local.total;
+    merged.aura = remote.aura ?? local.aura;
+    if (remote.upgrades) {
+      merged.upgrades = { ...local.upgrades };
+      for (const u of UPGRADES) {
+        merged.upgrades[u.id] = (remote.upgrades as any)[u.id] ?? 0;
+      }
+    }
+  } else if (remPrestige === local.prestige) {
+    // Ambos no mesmo nível de prestígio: adota o maior progresso alcançado na vida atual
     merged.total = Math.max(local.total, remote.total ?? 0);
     merged.aura = Math.max(local.aura, remote.aura ?? 0);
+    if (remote.upgrades) {
+      merged.upgrades = { ...local.upgrades };
+      for (const u of UPGRADES) {
+        merged.upgrades[u.id] = Math.max(local.upgrades[u.id] ?? 0, (remote.upgrades as any)[u.id] ?? 0);
+      }
+    }
   } else {
-    merged.total = Math.max(local.total, remote.total ?? 0);
-    merged.aura = Math.max(local.aura, remote.aura ?? 0);
+    // local.prestige > remPrestige: local já renasceu e está à frente, preserva a vida atual local
   }
-  merged.prestige = Math.max(local.prestige, remote.prestige ?? 0);
+
+  merged.lifetime = Math.max(local.lifetime, remote.lifetime ?? 0);
   merged.tokens = Math.max(local.tokens, remote.tokens ?? 0);
   merged.clicks = Math.max(local.clicks, remote.clicks ?? 0);
   merged.crits = Math.max(local.crits, remote.crits ?? 0);
@@ -180,11 +199,6 @@ export function mergeStates(local: State, remote: Partial<State>): State {
   merged.thieves = Math.max(local.thieves, remote.thieves ?? 0);
   merged.streak = Math.max(local.streak, remote.streak ?? 0);
 
-  if (remote.upgrades) {
-    for (const u of UPGRADES) {
-      merged.upgrades[u.id] = Math.max(local.upgrades[u.id] ?? 0, (remote.upgrades as any)[u.id] ?? 0);
-    }
-  }
   if (Array.isArray(remote.owned)) {
     merged.owned = [...new Set([...local.owned, ...remote.owned])];
   }

@@ -171,8 +171,6 @@ state.upgrades.cosmic = Math.max(state.upgrades.cosmic, localExt.cosmic);
 if (localExt.buffUntil) state.buffUntil = Math.max(state.buffUntil, localExt.buffUntil);
 if (localExt.prestige) state.prestige = Math.max(state.prestige, localExt.prestige);
 
-const TOKENS_RESTORED_KEY = "clawd-aura-farm:tokens-restored-v3";
-
 function getAchievementTokens(): number {
   return state.achievements.reduce((sum, id) => {
     const a = ACHIEVEMENTS.find(x => x.id === id);
@@ -194,20 +192,11 @@ function enforceLocalCosmetics(serverTokens?: number) {
     }
   }
 
-  // Restaura as Fichas 67 que estavam na conta do jogador (servidor / conquistas / roleta) sem nunca zerar
-  try {
-    const alreadyRestored = localStorage.getItem(TOKENS_RESTORED_KEY) === "1";
-    if (!alreadyRestored) {
-      const wheelTokens = getWheelTokensWon();
-      const achTokens = getAchievementTokens();
-      if (typeof serverTokens === "number") {
-        state.tokens = Math.max(state.tokens, serverTokens + wheelTokens, achTokens + wheelTokens);
-        localStorage.setItem(TOKENS_RESTORED_KEY, "1");
-      } else if (state.tokens === 0 && (achTokens > 0 || wheelTokens > 0)) {
-        state.tokens = Math.max(state.tokens, achTokens + wheelTokens);
-      }
-    }
-  } catch { /* ignore */ }
+  // Restaura e preserva o maior saldo legítimo de Fichas 67 obtidas em qualquer dispositivo, conquistas ou roleta
+  const wheelTokens = getWheelTokensWon();
+  const achTokens = getAchievementTokens();
+  const srvTok = typeof serverTokens === "number" ? serverTokens : 0;
+  state.tokens = Math.max(state.tokens, srvTok, achTokens + wheelTokens);
 }
 
 enforceLocalCosmetics();
@@ -217,8 +206,6 @@ if (sync && Object.keys(state.equipped).length > 0) {
 }
 let nameInputPrefilled = false;
 let settingName = false;
-
-const AURA_RESTORED_KEY = "clawd-aura-farm:aura-restored-v4";
 
 function updateMyRankHeader() {
   const el = $("my-rank");
@@ -234,54 +221,120 @@ function updateMyRankHeader() {
 function onServer(r: ServerState, _pending: string) {
   clockOffset = r.now - nowSec();
   const srv = toState(r);
+  let stateChanged = false;
 
   if (firstSync && state.lifetime === 0 && state.prestige === 0 && srv.lifetime > 0) {
     // Dispositivo/navegador novo no site: restaura o estado salvo na nuvem
     state = srv;
     state.upgrades.cosmic = Math.max(state.upgrades.cosmic, localExt.cosmic);
-    try { localStorage.setItem(AURA_RESTORED_KEY, "1"); } catch { /* ignore */ }
     if (r.offline >= 60) welcomeBack(r.offline, r.offline_gain);
+    stateChanged = true;
   } else {
-    if (firstSync) {
-      try {
-        const auraRestored = localStorage.getItem(AURA_RESTORED_KEY) === "1";
-        if (!auraRestored && srv.prestige >= state.prestige) {
-          state.aura = Math.max(state.aura, srv.aura);
-          state.total = Math.max(state.total, srv.total);
-          for (const u of UPGRADES) {
-            state.upgrades[u.id] = Math.max(state.upgrades[u.id], srv.upgrades[u.id]);
-          }
-          localStorage.setItem(AURA_RESTORED_KEY, "1");
+    // 1. Sincronização inteligente de prestígio e vida atual entre aparelhos
+    if (srv.prestige > state.prestige) {
+      // Outro dispositivo avançou o prestígio: adota a nova vida e os upgrades dela
+      state.prestige = srv.prestige;
+      state.total = srv.total;
+      state.aura = srv.aura;
+      for (const u of UPGRADES) {
+        state.upgrades[u.id] = srv.upgrades[u.id] ?? 0;
+      }
+      stateChanged = true;
+    } else if (srv.prestige === state.prestige) {
+      // Ambos no mesmo prestígio: sincroniza para o maior progresso alcançado (aura, total e upgrades)
+      if (srv.total > state.total) {
+        state.total = srv.total;
+        stateChanged = true;
+      }
+      if (srv.aura > state.aura) {
+        state.aura = srv.aura;
+        stateChanged = true;
+      }
+      for (const u of UPGRADES) {
+        const srvUp = srv.upgrades[u.id] ?? 0;
+        if (srvUp > (state.upgrades[u.id] ?? 0)) {
+          state.upgrades[u.id] = srvUp;
+          stateChanged = true;
         }
-      } catch { /* ignore */ }
+      }
     }
-    const hasEquipped = Object.keys(state.equipped).length > 0;
-    if (state.lifetime > srv.lifetime || state.prestige > srv.prestige) {
-      void sync?.syncProfile(state.lifetime, state.prestige, state.total, state.aura, state.equipped as Record<string, string>);
-    } else if (hasEquipped && Object.keys(srv.equipped || {}).length === 0) {
-      void sync?.setEquipped(state.equipped as Record<string, string>);
-      void sync?.syncProfile(state.lifetime, state.prestige, state.total, state.aura, state.equipped as Record<string, string>);
+
+    // 2. Progresso vitalício, fichas 67 e estatísticas cumulativas (sempre o máximo de ambos)
+    if (srv.lifetime > state.lifetime) {
+      state.lifetime = srv.lifetime;
+      stateChanged = true;
     }
-    state.lifetime = Math.max(state.lifetime, srv.lifetime);
     state.prestige = Math.max(state.prestige, srv.prestige, localExt.prestige || 0);
-    state.streak = Math.max(state.streak, srv.streak);
+
+    const serverTokens = typeof r.tokens === "number" ? r.tokens : 0;
+    if (serverTokens > state.tokens) {
+      state.tokens = serverTokens;
+      stateChanged = true;
+    }
+
+    state.clicks = Math.max(state.clicks, srv.clicks ?? 0);
+    state.crits = Math.max(state.crits, srv.crits ?? 0);
+    state.goldens = Math.max(state.goldens, srv.goldens ?? 0);
+    state.thieves = Math.max(state.thieves, srv.thieves ?? 0);
+    state.streak = Math.max(state.streak, srv.streak ?? 0);
+
     if (r.daily) dailyReward(state.streak);
+
+    // 3. Conquistas e cosméticos comprados (sempre a união permanente de ambos)
     for (const id of srv.owned) {
-      if (!state.owned.includes(id) && cosmeticById(id)) state.owned.push(id);
+      if (!state.owned.includes(id) && cosmeticById(id)) {
+        state.owned.push(id);
+        if (!localCos.owned.includes(id)) localCos.owned.push(id);
+        stateChanged = true;
+      }
     }
     for (const id of srv.achievements) {
       if (!state.achievements.includes(id)) {
         state.achievements.push(id);
         achievementUnlocked(id, true);
+        stateChanged = true;
+      }
+    }
+
+    // 4. Enfeites equipados: se o servidor tem e local não tem para o slot
+    if (srv.equipped && typeof srv.equipped === "object") {
+      for (const [slot, item] of Object.entries(srv.equipped)) {
+        if (item && !state.equipped[slot as Slot] && cosmeticById(item)) {
+          state.equipped[slot as Slot] = item;
+          localCos.equipped[slot as Slot] = item;
+          stateChanged = true;
+        }
       }
     }
   }
 
-  enforceLocalCosmetics(r.tokens);
-  save(state);
-  if (firstSync && Object.keys(state.equipped).length > 0) {
+  // 5. Se o dispositivo local possui MAIS progresso que o servidor, envia syncProfile para atualizar a nuvem
+  const serverTokens = typeof r.tokens === "number" ? r.tokens : 0;
+  const localAhead =
+    state.lifetime > srv.lifetime ||
+    state.prestige > srv.prestige ||
+    (state.prestige === srv.prestige && state.total > srv.total) ||
+    (state.prestige === srv.prestige && state.aura > srv.aura) ||
+    state.tokens > serverTokens;
+
+  if (localAhead) {
+    void sync?.syncProfile(
+      state.lifetime,
+      state.prestige,
+      state.total,
+      state.aura,
+      state.equipped as Record<string, string>
+    );
+  }
+
+  if (Object.keys(state.equipped).length > 0 && Object.keys(srv.equipped || {}).length === 0) {
     void sync?.setEquipped(state.equipped as Record<string, string>);
   }
+
+  enforceLocalCosmetics(r.tokens);
+  save(state);
+  saveLocalCos(localCos);
+  saveLocalExt(localExt);
   firstSync = false;
 
   if (r.name && !settingName) {
@@ -290,6 +343,7 @@ function onServer(r: ServerState, _pending: string) {
     saveLocalCos(localCos);
   }
   sync?.broadcastCosmetics(myName, state.equipped as Record<string, string>, state.lifetime, state.prestige);
+
   if (r.name && lastRank && r.rank && r.rank < lastRank && lastAhead) {
     toast(`🚀 Você passou ${lastAhead.name}! Agora é #${r.rank} no ranking.`);
     sfx.overtake();
@@ -297,6 +351,7 @@ function onServer(r: ServerState, _pending: string) {
   lastRank = r.rank;
   lastAhead = r.ahead;
   updateMyRankHeader();
+
   const displayNick = myName || r.name;
   if (displayNick && !nameInputPrefilled) {
     nameInputPrefilled = true;
@@ -305,7 +360,12 @@ function onServer(r: ServerState, _pending: string) {
     const accNameEl = $<HTMLInputElement>("acc-name-input");
     if (accNameEl && document.activeElement !== accNameEl) accNameEl.value = displayNick;
   }
-  render();
+
+  if (stateChanged) {
+    level = levelOf(state.total);
+    render();
+    updateMyRankHeader();
+  }
 }
 
 function welcomeBack(seconds: number, gained: number) {
@@ -1337,6 +1397,41 @@ $<HTMLInputElement>("input-import-json")?.addEventListener("change", async e => 
     render();
   } catch (err) {
     toast("Falha ao restaurar: " + (err as Error).message);
+  }
+});
+
+$("btn-sync-now")?.addEventListener("click", async () => {
+  const msg = $("token-sync-msg");
+  if (msg) msg.textContent = "🔄 Sincronizando com a nuvem...";
+  if (sync) {
+    try {
+      const srv = await sync.fetchState();
+      if (srv) {
+        state = mergeStates(state, toState(srv));
+        save(state);
+      }
+      await sync.syncProfile(
+        state.lifetime,
+        state.prestige,
+        state.total,
+        state.aura,
+        state.equipped as Record<string, string>
+      );
+      if (Object.keys(state.equipped).length > 0) {
+        await sync.setEquipped(state.equipped as Record<string, string>);
+      }
+      await sync.flush();
+      await loadRanking();
+      level = levelOf(state.total);
+      render();
+      updateMyRankHeader();
+      toast("✅ Progresso sincronizado com sucesso!");
+      if (msg) msg.textContent = "✅ Progresso 100% sincronizado com a nuvem!";
+      sfx.welcome();
+    } catch {
+      toast("❌ Erro ao sincronizar com a nuvem.");
+      if (msg) msg.textContent = "❌ Falha ao conectar ao servidor.";
+    }
   }
 });
 
