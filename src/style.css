@@ -846,3 +846,144 @@ button:focus-visible { outline: 3px solid var(--ink); outline-offset: 4px; }
   line-height: 1.5;
 }
 
+/* ===== Sincronização e Confirmação por Código (Google, Facebook, Apple ID, Número) ===== */
+.menu.auth-required .shop-head {
+  display: none;
+}
+
+.acc-linked-badge {
+  margin: .2rem 0;
+  font-size: .8rem;
+  font-weight: 700;
+  color: #4ade80;
+}
+
+.social-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: .45rem;
+  margin: .6rem 0 .8rem;
+}
+
+.social-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: .3rem;
+  padding: .55rem .35rem;
+  border-radius: 6px;
+  border: 1.5px solid color-mix(in srgb, var(--violet) 40%, transparent);
+  background: color-mix(in srgb, var(--night) 70%, var(--dusk));
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: .78rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color .15s, background .15s, transform .1s;
+}
+
+.social-btn:hover {
+  border-color: var(--aura);
+  transform: translateY(-1px);
+}
+
+.social-btn.active {
+  border-color: var(--aura);
+  background: color-mix(in srgb, var(--aura) 18%, var(--dusk));
+  color: var(--aura);
+  box-shadow: 0 0 12px rgba(255, 209, 102, .22);
+}
+
+.social-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  font-weight: 900;
+  font-size: .95rem;
+}
+
+.google-ic { background: #fff; color: #ea4335; }
+.fb-ic { background: #1877f2; color: #fff; }
+.phone-ic { background: #25d366; color: #fff; font-size: .85rem; }
+.apple-ic { background: #000; color: #fff; border: 1px solid #555; }
+
+.social-form {
+  display: flex;
+  flex-direction: column;
+  gap: .45rem;
+  text-align: left;
+}
+
+.social-form label {
+  font-size: .78rem;
+  font-weight: 700;
+  color: var(--aura);
+}
+
+.otp-step-box {
+  margin-top: .5rem;
+  padding: .75rem;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--violet) 22%, var(--night));
+  border: 1px dashed var(--aura);
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+}
+
+.otp-step-box[hidden] {
+  display: none !important;
+}
+
+.otp-delivery-banner {
+  background: color-mix(in srgb, #22c55e 18%, var(--night));
+  border: 1px solid #4ade80;
+  color: #dcfce7;
+  padding: .55rem .7rem;
+  border-radius: 6px;
+  font-size: .82rem;
+  line-height: 1.4;
+}
+
+.otp-delivery-banner b {
+  font-family: var(--mono);
+  font-size: 1.15rem;
+  color: #ffd166;
+  letter-spacing: .12em;
+}
+
+#social-code-input {
+  font-family: var(--mono);
+  font-size: 1.15rem;
+  letter-spacing: .2em;
+  text-align: center;
+  font-weight: 800;
+}
+
+.btn-whatsapp {
+  background: linear-gradient(180deg, #25d366, #1da851);
+  color: #071f10;
+  border: none;
+  border-radius: 6px;
+  padding: .55rem .8rem;
+  font-family: var(--font);
+  font-weight: 800;
+  font-size: .82rem;
+  cursor: pointer;
+}
+
+.btn-whatsapp:hover {
+  filter: brightness(1.08);
+}
+
+@media (max-width: 560px) {
+  .social-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+

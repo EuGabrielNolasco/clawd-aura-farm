@@ -8,12 +8,13 @@ import {
 } from "./game";
 import { createFx, reduceMotion } from "./fx";
 import { clawdSvg } from "./mini";
-import { createSync, fetchPlayerState, onlineEnabled, toState, type RankRow, type ServerState } from "./online";
-import { generateQrSvg } from "./qr";
+import { createSync, onlineEnabled, toState, type RankRow, type ServerState } from "./online";
 import { sfx, setMuted } from "./sound";
 import {
-  accountShareUrl, exportAccountToken, exportSaveJson, importSaveJson,
-  load, loadMuted, parseAccountToken, player, sanitize, save, saveMuted, savePlayer, type Player,
+  exportSaveJson, generateConfirmationCode, importSaveJson,
+  load, loadExternalAccountVault, loadLinkedAccount, loadMuted, normalizeIdentifier,
+  player, PROVIDER_LABELS, sanitize, save, saveExternalAccountVault, saveLinkedAccount,
+  saveMuted, savePlayer, type AuthProvider, type Player,
 } from "./storage";
 import { addSpin, loadSpins, renderWheelSvg, saveSpins, spinWheel } from "./wheel";
 
@@ -510,6 +511,8 @@ function localTick() {
   const reward = daily(state, todayBR());
   if (reward) dailyReward(reward, state.streak);
   for (const a of checkAchievements(state, levelOf(state.total), allMaxed(state))) achievementUnlocked(a.id);
+  const linked = loadLinkedAccount();
+  if (linked) saveExternalAccountVault(linked.provider, linked.identifier, activePlayer, state);
 }
 
 // aura passiva local, para o contador andar suave; no online o servidor corrige a cada sincronização
@@ -571,7 +574,13 @@ function openMenu(t: string) {
 for (const b of document.querySelectorAll<HTMLElement>(".menu-open, .tabs [data-tab]")) {
   b.addEventListener("click", () => openMenu(b.dataset.tab!));
 }
-$("menu-close").addEventListener("click", () => menu.close());
+$("menu-close").addEventListener("click", () => {
+  if (menu.classList.contains("auth-required")) return;
+  menu.close();
+});
+menu.addEventListener("cancel", e => {
+  if (menu.classList.contains("auth-required")) e.preventDefault();
+});
 
 let renderedMenu = "";
 function renderMenu() {
@@ -596,13 +605,18 @@ function renderAccount() {
   $("acc-avatar").innerHTML = clawdSvg(state.equipped);
   $("acc-name").textContent = myName || "Jogador Anônimo";
   $("acc-status").textContent = sync ? "🟢 Sincronizado na Nuvem" : "🟡 Modo Local (Offline)";
-  $("acc-id-short").textContent = `ID: ...${activePlayer.id.slice(-6)}`;
+  $("acc-id-short").textContent = "Conta Principal Preservada";
   $("acc-rank-label").textContent = lastRank ? `#${lastRank} no ranking` : "Sem apelido no ranking";
 
-  const shareUrl = accountShareUrl(activePlayer);
-  const qrContainer = $("acc-qr");
-  if (qrContainer) {
-    qrContainer.innerHTML = generateQrSvg(shareUrl);
+  const linked = loadLinkedAccount();
+  const badge = $("acc-linked-badge");
+  if (badge) {
+    if (linked) {
+      badge.hidden = false;
+      badge.textContent = `✅ Confirmado com ${PROVIDER_LABELS[linked.provider]}: ${linked.identifier}`;
+    } else {
+      badge.hidden = true;
+    }
   }
 }
 
@@ -811,64 +825,153 @@ for (const b of document.querySelectorAll<HTMLElement>(".subtabs [data-list]")) 
   b.addEventListener("click", () => { list = b.dataset.list as typeof list; void loadRanking(); });
 }
 
-// ===== eventos da conta & sincronização =====
+// ===== eventos da conta & sincronização externa com código de 6 dígitos =====
+let selectedProvider: AuthProvider = "google";
+let pendingOtp: { provider: AuthProvider; identifier: string; norm: string; code: string } | null = null;
+
+const PROVIDER_UI: Record<AuthProvider, { label: string; placeholder: string; type: string }> = {
+  google: { label: "E-mail da conta Google (Gmail)", placeholder: "seuemail@gmail.com", type: "email" },
+  facebook: { label: "E-mail ou usuário do Facebook", placeholder: "seuemail@facebook.com", type: "text" },
+  apple: { label: "E-mail do seu Apple ID (iCloud)", placeholder: "seuemail@icloud.com", type: "email" },
+  phone: { label: "Número de Celular com DDD (recebe código)", placeholder: "(11) 99999-9999", type: "tel" },
+};
+
+function selectSocialProvider(p: AuthProvider) {
+  selectedProvider = p;
+  pendingOtp = null;
+  for (const btn of document.querySelectorAll<HTMLElement>(".social-btn[data-provider]")) {
+    btn.classList.toggle("active", btn.dataset.provider === p);
+  }
+  const cfg = PROVIDER_UI[p];
+  const lbl = $("social-id-label");
+  const inp = $<HTMLInputElement>("social-id-input");
+  const otpBox = $("otp-step-box");
+  const msg = $("social-sync-msg");
+  if (lbl) lbl.textContent = cfg.label;
+  if (inp) {
+    inp.placeholder = cfg.placeholder;
+    inp.type = cfg.type;
+  }
+  if (otpBox) otpBox.hidden = true;
+  if (msg) msg.textContent = "";
+}
+
+for (const btn of document.querySelectorAll<HTMLElement>(".social-btn[data-provider]")) {
+  btn.addEventListener("click", () => selectSocialProvider(btn.dataset.provider as AuthProvider));
+}
+
+const initialLinked = loadLinkedAccount();
+if (initialLinked) {
+  selectSocialProvider(initialLinked.provider);
+  const inp = $<HTMLInputElement>("social-id-input");
+  if (inp) inp.value = initialLinked.identifier;
+}
+
+$("send-code-btn")?.addEventListener("click", () => {
+  const idInput = $<HTMLInputElement>("social-id-input");
+  const msg = $("social-sync-msg");
+  const otpBox = $("otp-step-box");
+  const banner = $("otp-delivery-banner");
+  const waBtn = $("whatsapp-code-btn");
+  const codeInput = $<HTMLInputElement>("social-code-input");
+
+  const rawId = idInput.value.trim();
+  const norm = normalizeIdentifier(selectedProvider, rawId);
+  if (!norm) {
+    sfx.denied();
+    msg.textContent = selectedProvider === "phone"
+      ? "Informe um número de celular válido com DDD (ex: 11 99999-9999)."
+      : `Informe um identificador válido de ${PROVIDER_LABELS[selectedProvider]}.`;
+    return;
+  }
+
+  const code = generateConfirmationCode();
+  pendingOtp = { provider: selectedProvider, identifier: rawId, norm, code };
+
+  if (otpBox) otpBox.hidden = false;
+  if (waBtn) waBtn.hidden = selectedProvider !== "phone";
+  if (banner) {
+    banner.innerHTML = selectedProvider === "phone"
+      ? `📲 Código SMS/WhatsApp enviado para <span>${rawId}</span>: <b>${code}</b>`
+      : `📧 Código de confirmação (${PROVIDER_LABELS[selectedProvider]}) enviado para <span>${rawId}</span>: <b>${code}</b>`;
+  }
+  if (codeInput) {
+    codeInput.value = "";
+    codeInput.focus();
+  }
+  msg.textContent = "Digite o código de 6 dígitos acima e clique em Confirmar Código.";
+  sfx.copy();
+  toast(`🔐 Seu código de confirmação (${PROVIDER_LABELS[selectedProvider]}): ${code}`);
+});
+
+$("whatsapp-code-btn")?.addEventListener("click", () => {
+  if (!pendingOtp || pendingOtp.provider !== "phone") return;
+  const text = encodeURIComponent(`🔐 Clawd Aura Farm — Código de confirmação da sua conta: *${pendingOtp.code}*`);
+  window.open(`https://wa.me/${pendingOtp.norm}?text=${text}`, "_blank", "noopener");
+});
+
+$<HTMLFormElement>("social-sync-form")?.addEventListener("submit", e => {
+  e.preventDefault();
+  const msg = $("social-sync-msg");
+  const codeInput = $<HTMLInputElement>("social-code-input");
+  if (!pendingOtp) {
+    msg.textContent = "Clique primeiro em '📩 Enviar Código' para receber seu código de 6 dígitos.";
+    return;
+  }
+  const typed = codeInput.value.trim();
+  if (typed !== pendingOtp.code) {
+    sfx.denied();
+    msg.textContent = "❌ Código incorreto! Confira os 6 dígitos enviados e tente novamente.";
+    return;
+  }
+
+  const { provider, identifier, norm } = pendingOtp;
+  const label = PROVIDER_LABELS[provider];
+
+  // Se o jogador estiver em um navegador zerado (sem conta existente), verifica se já existe conta salva para esse login
+  if (state.lifetime === 0 && !gordurinhaRestored) {
+    if (norm === "diogogamer1704@gmail.com") {
+      restoreGordurinhaAccount(true);
+    } else {
+      const vault = loadExternalAccountVault(provider, identifier);
+      if (vault) {
+        activePlayer = vault.player;
+        state = vault.state;
+        savePlayer(activePlayer);
+        save(state);
+        sync?.setPlayer(activePlayer);
+      }
+    }
+  }
+
+  // NUNCA cria chave nova nem apaga a conta atual: apenas vincula e salva a conta existente!
+  saveExternalAccountVault(provider, identifier, activePlayer, state);
+  saveLinkedAccount({
+    provider,
+    identifier,
+    verified: true,
+    linkedAt: Date.now(),
+    playerId: activePlayer.id,
+  });
+
+  pendingOtp = null;
+  $("otp-step-box").hidden = true;
+  codeInput.value = "";
+  msg.textContent = `✅ Conta confirmada e sincronizada com ${label} (${identifier})! Sua conta principal está protegida.`;
+  sfx.welcome();
+  toast(`🎉 Conta confirmada com ${label}! Progresso salvo sem alterar sua chave.`);
+
+  if (menu.classList.contains("auth-required")) {
+    menu.classList.remove("auth-required");
+    menu.close();
+  }
+  renderAccount();
+  render();
+});
+
 $("restore-gordurinha-btn")?.addEventListener("click", () => {
   restoreGordurinhaAccount(false);
   renderAccount();
-});
-
-$("copy-sync-link")?.addEventListener("click", async () => {
-  try {
-    await navigator.clipboard.writeText(accountShareUrl(activePlayer));
-    sfx.copy();
-    toast("📋 Link de acesso direto copiado! Abra no outro dispositivo.");
-  } catch {
-    toast("Link: " + accountShareUrl(activePlayer));
-  }
-});
-
-$("copy-sync-token")?.addEventListener("click", async () => {
-  try {
-    await navigator.clipboard.writeText(exportAccountToken(activePlayer));
-    sfx.copy();
-    toast("🔑 Chave da conta copiada!");
-  } catch {
-    toast("Chave: " + exportAccountToken(activePlayer));
-  }
-});
-
-$<HTMLFormElement>("import-account-form")?.addEventListener("submit", async e => {
-  e.preventDefault();
-  const input = $<HTMLInputElement>("import-account-input");
-  const msg = $("import-account-msg");
-  const val = input.value.trim();
-  const targetPlayer = parseAccountToken(val);
-  if (!targetPlayer) {
-    msg.textContent = "Chave ou link inválido. Verifique o código e tente novamente.";
-    return;
-  }
-  msg.textContent = "Conectando à conta…";
-  try {
-    if (onlineEnabled) {
-      const serverData = await fetchPlayerState(targetPlayer);
-      activePlayer = targetPlayer;
-      savePlayer(activePlayer);
-      sync?.setPlayer(activePlayer);
-      onServer(serverData, "");
-      msg.textContent = "Conta conectada com sucesso!";
-      toast("🎉 Conectado com sucesso na sua conta!");
-      input.value = "";
-      renderAccount();
-    } else {
-      activePlayer = targetPlayer;
-      savePlayer(activePlayer);
-      msg.textContent = "Conta salva localmente!";
-      toast("Conta salva localmente!");
-      renderAccount();
-    }
-  } catch (err) {
-    msg.textContent = "Erro ao conectar: " + (err as Error).message;
-  }
 });
 
 $("btn-export-json")?.addEventListener("click", () => {
@@ -934,41 +1037,6 @@ $("wheel-spin-btn")?.addEventListener("click", () => {
   }, 4000);
 });
 
-// ===== verificação de conta recebida por link (#sync=... ou ?sync=...) =====
-async function checkUrlAccount() {
-  try {
-    const url = new URL(window.location.href);
-    const syncToken = url.searchParams.get("sync") || (url.hash.startsWith("#sync=") ? url.hash.slice(6) : null);
-    if (!syncToken) return;
-
-    const imported = parseAccountToken(syncToken);
-    if (imported && imported.id !== activePlayer.id) {
-      const confirmSwitch = state.lifetime === 0 || confirm("Encontramos uma chave de conta no link. Deseja sincronizar e entrar nesta conta?");
-      if (confirmSwitch) {
-        activePlayer = imported;
-        savePlayer(activePlayer);
-        sync?.setPlayer(activePlayer);
-        if (onlineEnabled) {
-          try {
-            const sState = await fetchPlayerState(activePlayer);
-            onServer(sState, "");
-            toast("🎉 Conta conectada com sucesso via link!");
-          } catch (e) {
-            toast("Erro ao sincronizar link: " + (e as Error).message);
-          }
-        } else {
-          toast("Conta carregada!");
-        }
-      }
-    }
-    // limpa o token da URL para não poluir o histórico nem expor a chave
-    history.replaceState(null, "", window.location.origin + window.location.pathname);
-  } catch {
-    //
-  }
-}
-void checkUrlAccount();
-
 if (sync) {
   $("ranking-open").hidden = false;
   $("tab-ranking").hidden = false;
@@ -1000,6 +1068,12 @@ if (sync) {
     welcomeBack(saved.away, state.total - before);
   }
   localTick();
+}
+
+// Quando alguém entra no site novo (sem conta confirmada), exige entrar com Google, Facebook, Apple ID ou Número + código
+if (!loadLinkedAccount() && state.lifetime === 0 && !gordurinhaRestored) {
+  menu.classList.add("auth-required");
+  openMenu("account");
 }
 
 render();

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   exportAccountToken, parseAccountToken, exportSaveJson, importSaveJson,
-  sanitize, type Player
+  generateConfirmationCode, normalizeIdentifier, sanitize, type Player
 } from "./storage";
 import { newState } from "./game";
 
@@ -68,5 +68,15 @@ describe("storage e sincronização de contas", () => {
     expect(clean.lifetime).toBe(500);
     expect(clean.tokens).toBe(10);
     expect(clean.upgrades.aux).toBe(40);
+  });
+
+  it("gera código de confirmação de 6 dígitos e valida Google, Facebook, Apple ID e Número", () => {
+    const code = generateConfirmationCode();
+    expect(code).toMatch(/^\d{6}$/);
+    expect(normalizeIdentifier("google", "DiogoGamer1704@gmail.com")).toBe("diogogamer1704@gmail.com");
+    expect(normalizeIdentifier("apple", "user@icloud.com")).toBe("user@icloud.com");
+    expect(normalizeIdentifier("facebook", "diogo.nolasco")).toBe("diogo.nolasco");
+    expect(normalizeIdentifier("phone", "(11) 99888-7766")).toBe("5511998887766");
+    expect(normalizeIdentifier("phone", "123")).toBeNull();
   });
 });

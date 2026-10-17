@@ -195,3 +195,109 @@ export function saveMuted(muted: boolean) {
   try { localStorage.setItem(MUTE_KEY, muted ? "1" : "0"); } catch { /* ignora */ }
 }
 
+export type AuthProvider = "google" | "facebook" | "apple" | "phone";
+
+export interface LinkedAccount {
+  provider: AuthProvider;
+  identifier: string;
+  verified: boolean;
+  linkedAt: number;
+  playerId: string;
+}
+
+const LINKED_ACCOUNT_KEY = "clawd-aura-farm:linked-account-v2";
+const EXTERNAL_VAULT_PREFIX = "clawd-aura-farm:ext-vault:";
+
+export const PROVIDER_LABELS: Record<AuthProvider, string> = {
+  google: "Google",
+  facebook: "Facebook",
+  apple: "Apple ID",
+  phone: "Número de Celular",
+};
+
+/** Normaliza e valida o identificador (e-mail para Google/Facebook/Apple ou dígitos para celular). */
+export function normalizeIdentifier(provider: AuthProvider, raw: string): string | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  if (provider === "phone") {
+    const digits = trimmed.replace(/\D/g, "");
+    if (digits.length < 10 || digits.length > 15) return null;
+    return digits.length <= 11 && !digits.startsWith("55") ? `55${digits}` : digits;
+  }
+  const lower = trimmed.toLowerCase();
+  if (provider === "google" || provider === "apple") {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(lower)) return null;
+    return lower;
+  }
+  // facebook aceita e-mail ou nome de usuário (mín. 3 caracteres)
+  if (lower.length < 3) return null;
+  return lower;
+}
+
+/** Gera um código numérico de 6 dígitos para confirmação da conta. */
+export function generateConfirmationCode(): string {
+  const arr = new Uint32Array(1);
+  crypto.getRandomValues(arr);
+  const n = 100000 + (arr[0] % 900000);
+  return String(n);
+}
+
+export function loadLinkedAccount(): LinkedAccount | null {
+  try {
+    const raw = localStorage.getItem(LINKED_ACCOUNT_KEY);
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    if (
+      data &&
+      typeof data === "object" &&
+      (data.provider === "google" || data.provider === "facebook" || data.provider === "apple" || data.provider === "phone") &&
+      typeof data.identifier === "string" &&
+      data.verified === true
+    ) {
+      return data as LinkedAccount;
+    }
+  } catch { /* ignore */ }
+  return null;
+}
+
+export function saveLinkedAccount(acc: LinkedAccount) {
+  try {
+    localStorage.setItem(LINKED_ACCOUNT_KEY, JSON.stringify(acc));
+  } catch { /* ignore */ }
+}
+
+/**
+ * Salva a conta atual (sem alterar a chave/ID da conta) vinculada ao provedor externo confirmado.
+ */
+export function saveExternalAccountVault(provider: AuthProvider, identifier: string, p: Player, s: State) {
+  const norm = normalizeIdentifier(provider, identifier);
+  if (!norm) return;
+  try {
+    const key = `${EXTERNAL_VAULT_PREFIX}${provider}:${norm}`;
+    localStorage.setItem(key, JSON.stringify({
+      player: p,
+      state: { ...s, savedAt: Date.now() },
+      updatedAt: Date.now(),
+    }));
+  } catch { /* ignore */ }
+}
+
+/**
+ * Busca uma conta previamente salva neste navegador para o provedor/identificador confirmado,
+ * sem gerar uma chave nova.
+ */
+export function loadExternalAccountVault(provider: AuthProvider, identifier: string): { player: Player; state: State } | null {
+  const norm = normalizeIdentifier(provider, identifier);
+  if (!norm) return null;
+  try {
+    const key = `${EXTERNAL_VAULT_PREFIX}${provider}:${norm}`;
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    const res = importSaveJson(JSON.stringify(parsed));
+    if (res && res.player) return { player: res.player, state: res.state };
+  } catch { /* ignore */ }
+  return null;
+}
+
+

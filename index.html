@@ -186,54 +186,71 @@
       <button id="menu-close" type="button" aria-label="Fechar">✕</button>
     </div>
 
-    <!-- Painel: Conta, Sincronização PC <-> Celular e Backup -->
+    <!-- Painel: Conta, Sincronização Externa (Google, Facebook, Apple ID, Número) e Backup -->
     <section class="panel" data-panel="account" role="tabpanel">
       <div class="account-card">
         <div class="acc-avatar" id="acc-avatar"></div>
         <div class="acc-info">
           <h3 id="acc-name">Jogador Anônimo</h3>
           <p id="acc-status" class="acc-badge">🟢 Conectado na Nuvem</p>
-          <p class="acc-meta"><small id="acc-id-short">ID: ...</small> · <small id="acc-rank-label">Sem ranking</small></p>
+          <p id="acc-linked-badge" class="acc-linked-badge" hidden></p>
+          <p class="acc-meta"><small id="acc-id-short">Conta Ativa</small> · <small id="acc-rank-label">Sem ranking</small></p>
         </div>
       </div>
 
       <div class="acc-box highlight">
-        <h4>👑 Recuperação da Conta Principal (Gordurinha #1)</h4>
-        <p class="acc-desc">Restaure instantaneamente sua conta principal com 858,2 bi de aura, ⭐ 2, 56 fichas, 6 giros e todos os seus enfeites:</p>
-        <button type="button" id="restore-gordurinha-btn" class="btn-accent">👑 Restaurar Conta Gordurinha (#1)</button>
-      </div>
+        <h4>🔐 Sincronizar e Confirmar Conta (Google, Facebook, Apple ID ou Número)</h4>
+        <p class="acc-desc">Salve sua conta atual vinculando ao seu Google, Facebook, Apple ID ou Número com código de confirmação de 6 dígitos (<b>sem criar chave nova e sem perder sua conta</b>):</p>
 
-      <div class="acc-box">
-        <h4>📲 Jogar no PC e Celular com a mesma conta</h4>
-        <p class="acc-desc">Abra no outro aparelho e continue exatamente de onde parou!</p>
-        <div class="sync-options">
-          <div class="qr-wrap" id="acc-qr-wrap">
-            <div id="acc-qr" class="qr-canvas"></div>
-            <p><small>📷 Aponte a câmera do celular para abrir esta conta direto</small></p>
-          </div>
-          <div class="sync-actions">
-            <button type="button" id="copy-sync-link" class="btn-accent">📋 Copiar Link de Acesso Direto</button>
-            <button type="button" id="copy-sync-token" class="btn-secondary">🔑 Copiar Chave da Conta</button>
-            <p class="sync-tip"><small>Envie o link para você mesmo (WhatsApp, Telegram ou e-mail) e clique nele no PC ou celular.</small></p>
-          </div>
+        <div class="social-grid" role="group" aria-label="Escolha onde sincronizar">
+          <button type="button" class="social-btn active" data-provider="google">
+            <span class="social-icon google-ic">G</span>
+            <span>Google</span>
+          </button>
+          <button type="button" class="social-btn" data-provider="facebook">
+            <span class="social-icon fb-ic">f</span>
+            <span>Facebook</span>
+          </button>
+          <button type="button" class="social-btn" data-provider="apple">
+            <span class="social-icon apple-ic"></span>
+            <span>Apple ID</span>
+          </button>
+          <button type="button" class="social-btn" data-provider="phone">
+            <span class="social-icon phone-ic">📱</span>
+            <span>Número</span>
+          </button>
         </div>
-      </div>
 
-      <div class="acc-box">
-        <h4>🔄 Entrar em uma conta existente</h4>
-        <p class="acc-desc">Cole a chave ou o link copiado do outro aparelho para sincronizar:</p>
-        <form id="import-account-form" class="acc-form">
+        <form id="social-sync-form" class="acc-form social-form">
+          <label for="social-id-input" id="social-id-label">E-mail da conta Google (Gmail)</label>
           <div class="name-row">
-            <input id="import-account-input" placeholder="Cole AURA_... ou o link completo" autocomplete="off" required>
-            <button type="submit" class="btn-accent">Conectar</button>
+            <input id="social-id-input" type="email" placeholder="seuemail@gmail.com" autocomplete="username" required>
+            <button type="button" id="send-code-btn" class="btn-accent">📩 Enviar Código</button>
           </div>
-          <p class="name-msg" id="import-account-msg" role="status"></p>
+
+          <div id="otp-step-box" class="otp-step-box" hidden>
+            <div id="otp-delivery-banner" class="otp-delivery-banner" role="alert"></div>
+            <button type="button" id="whatsapp-code-btn" class="btn-whatsapp" hidden>💬 Receber Código no WhatsApp</button>
+            <label for="social-code-input">Digite o código de 6 dígitos enviado para confirmar:</label>
+            <div class="name-row">
+              <input id="social-code-input" type="text" inputmode="numeric" maxlength="6" pattern="\d{6}" placeholder="000000" autocomplete="one-time-code">
+              <button type="submit" id="verify-code-btn" class="btn-accent">✅ Confirmar Código</button>
+            </div>
+          </div>
+
+          <p class="name-msg" id="social-sync-msg" role="status"></p>
         </form>
       </div>
 
       <div class="acc-box">
-        <h4>💾 Backup Local (Offline)</h4>
-        <p class="acc-desc">Baixe ou restaure o arquivo de progresso no seu computador ou celular:</p>
+        <h4>👑 Recuperação Rápida da Conta Principal (Gordurinha #1)</h4>
+        <p class="acc-desc">Caso precise restaurar sua conta principal (#1 do ranking com 858,2 bi de aura, ⭐ 2, 56 fichas, 6 giros e todos os enfeites):</p>
+        <button type="button" id="restore-gordurinha-btn" class="btn-secondary">👑 Restaurar Conta Gordurinha (#1)</button>
+      </div>
+
+      <div class="acc-box">
+        <h4>💾 Backup em Arquivo (.json)</h4>
+        <p class="acc-desc">Baixe ou carregue uma cópia de segurança do seu progresso:</p>
         <div class="acc-backup-row">
           <button type="button" id="btn-export-json" class="btn-secondary">⬇ Baixar Backup (.json)</button>
           <label class="btn-secondary file-btn">
