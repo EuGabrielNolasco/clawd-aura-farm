@@ -17,7 +17,7 @@ Jogo incremental (*idle clicker*) para o navegador (PC e Celular). O Clawd, masc
 - [Sincronização com Google OAuth 2.0 (PC ⇄ Celular)](#sincronização-com-google-oauth-20-pc--celular)
 - [Roleta da Sorte 67 & Missões Diárias](#roleta-da-sorte-67--missões-diárias)
 - [Níveis](#níveis)
-- [Loja de Aura (8 Upgrades)](#loja-de-aura-8-upgrades)
+- [Loja de Aura (6 Upgrades)](#loja-de-aura-6-upgrades)
 - [Eventos, conquistas e enfeites (36 itens)](#eventos-conquistas-e-enfeites-36-itens)
 - [Prestígio (Renascer ⭐)](#prestígio-renascer-)
 - [Ranking em tempo real e segurança](#ranking-em-tempo-real-e-segurança)
@@ -49,7 +49,7 @@ O projeto conta com uma central de documentação completa em [`docs/`](docs/):
 - **Economia Exclusiva de Giros e Fichas 67:**
   - **Giros na Roleta (🎰):** Recebidos exclusivamente com **Login Diário**, **Missões Diárias concluídas** e **Rank subido** (além de conquistas desbloqueadas).
   - **Fichas 67 (🎟):** Recebidas exclusivamente com **Conquistas concluídas** e **prêmios ganhos na Roleta da Sorte**.
-- **Loja de Aura com 8 Upgrades (190 níveis):** De *Clawd auxiliar* e *Mão firme* até *Datacenter do Clawd*, *IA Quântica 67*, *Portal Multiversal* e *Aura cósmica*, com balanceamento anti-inflação.
+- **Loja de Aura com 6 Upgrades (145 níveis):** De *Clawd auxiliar* e *Mão firme* até *Datacenter do Clawd* e *Aura cósmica*, com custos e efeitos originais balanceados.
 - **Loja de Enfeites com 36 Cosméticos:** 8 fundos animados, 8 chapéus, 7 acessórios de rosto, 7 roupas e 6 cores especiais para personalizar o Clawd. O visual equipado fica salvo permanentemente e aparece no avatar do jogador no Ranking Global em tempo real!
 - **Prestígio (Renascer ⭐):** Ao alcançar o nível máximo (*O Próprio 67*), renasça zerando a aura atual e toda a loja para recomeçar do nível *NPC* com **+1 Estrela (⭐)** e **+25% de bônus permanente** em toda a aura, mantendo Fichas 67, Enfeites, Conquistas e Aura Vitalícia no Ranking.
 - **16 níveis com memes BR:** De *NPC* a *O Próprio 67*, passando por *Cria*, *Brabo*, *O Pai Tá On*, *Sigma*, *Mega Brain* e *Coop Thief*.
@@ -124,20 +124,18 @@ Cada nível concede **+10% em toda a aura**, e cada estrela de prestígio (⭐) 
 | 14 | Clawd Supremo | 98 bi | Cores da tela girando |
 | 15 | O Próprio 67 | 270 bi | Chuva de 67 e libera o botão **Renascer (⭐)** |
 
-## Loja de Aura (8 Upgrades)
+## Loja de Aura (6 Upgrades)
 
-Paga com aura. O preço de cada upgrade sobe exponencialmente a cada compra, somando **190 compras máximas** por vida:
+Paga com aura. O preço de cada upgrade sobe exponencialmente a cada compra, somando **145 compras máximas** por vida:
 
 | Upgrade | Efeito por compra | Preço inicial | Escalonamento | Limite |
 |---|---|--:|--:|--:|
-| **Clawd auxiliar** | +1 de aura por segundo | 150 | ×1,25 | 40 |
-| **Mão firme** | +25% de aura por clique | 600 | ×1,38 | 30 |
-| **Olhar sigma** | +2% de chance de crítico | 15 mil | ×2,50 | 10 |
-| **Fábrica de 67** | +20 de aura por segundo | 80 mil | ×1,28 | 30 |
-| **Datacenter do Clawd** | +250 de aura por segundo | 60 mi | ×1,32 | 30 |
-| **IA Quântica 67** | +1.200 de aura por segundo | 800 mi | ×1,38 | 25 |
-| **Portal Multiversal** | +3.500/s e +15% no clique | 12 bi | ×1,42 | 20 |
-| **Aura cósmica** | +50% em toda a aura (`×1,5`) | 25 bi | ×6,00 | 5 |
+| **Clawd auxiliar** | +2 de aura por segundo | 50 | ×1,18 | 40 |
+| **Mão firme** | +50% de aura por clique | 200 | ×1,30 | 30 |
+| **Olhar sigma** | +3% de chance de crítico | 5 mil | ×2,20 | 10 |
+| **Fábrica de 67** | +60 de aura por segundo | 20 mil | ×1,22 | 30 |
+| **Datacenter do Clawd** | +4.000 de aura por segundo | 20 mi | ×1,25 | 30 |
+| **Aura cósmica** | Dobra toda a aura (`×2`) | 3,2 bi | ×5,00 | 5 |
 
 ## Eventos, conquistas e enfeites (36 itens)
 
@@ -159,7 +157,7 @@ Paga com aura. O preço de cada upgrade sobe exponencialmente a cada compra, som
 ## Prestígio (Renascer ⭐)
 
 Ao alcançar o nível 15 (*O Próprio 67*), o botão **✨ Renascer** aparece:
-- **Zera a vida atual:** sua Aura atual volta a `0`, o nível volta para `NPC` e todos os 8 upgrades da Loja voltam a `0/máx`.
+- **Zera a vida atual:** sua Aura atual volta a `0`, o nível volta para `NPC` e todos os 6 upgrades da Loja voltam a `0/máx`.
 - **Ganha +1 Estrela (⭐):** concede **+25% permanentes** em toda a aura gerada em todas as vidas futuras.
 - **Preserva conquistas e coleção:** suas Fichas 67, seus Enfeites comprados/equipados, suas Conquistas e sua Aura Vitalícia no Ranking Global permanecem intactos.
 
@@ -218,7 +216,7 @@ Em ambiente de desenvolvimento (`npm run dev`), um botão 🛠 aparece no canto 
 │   └── manifest.json        # Manifesto PWA para instalação no celular
 ├── src/
 │   ├── main.ts              # Integração de estado, DOM, áudio, OAuth2, Roleta e Ranking
-│   ├── game.ts              # Regras do jogo: níveis, 8 upgrades, combo, eventos e prestígio
+│   ├── game.ts              # Regras do jogo: níveis, 6 upgrades, combo, eventos e prestígio
 │   ├── wheel.ts             # Roleta da Sorte 67 (10 fatias, login diário e 4 missões diárias)
 │   ├── achievements.ts      # 15 conquistas com progresso e recompensas em Fichas 67
 │   ├── cosmetics.ts         # Catálogo de 36 enfeites em pixel art SVG (5 categorias)

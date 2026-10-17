@@ -38,15 +38,13 @@ async function rpc<T>(fn: string, body: object, keepalive = false): Promise<T> {
 /** Converte a resposta do servidor em State, validando tudo que chega. */
 export function toState(r: ServerState): State {
   const upgrades: Record<string, unknown> = {};
-  if (r.ups?.length === 6) {
+  if (r.ups && r.ups.length >= 8) {
     upgrades.aux = r.ups[0];
     upgrades.click = r.ups[1];
     upgrades.crit = r.ups[2];
     upgrades.fab = r.ups[3];
     upgrades.dc = r.ups[4];
-    upgrades.ia = 0;
-    upgrades.portal = 0;
-    upgrades.cosmic = r.ups[5];
+    upgrades.cosmic = r.ups[7];
   } else {
     UPGRADES.forEach((u, i) => { upgrades[u.id] = r.ups?.[i]; });
   }

@@ -114,8 +114,6 @@ if (localCos.name) myName = localCos.name;
 
 const LOCAL_EXT_KEY = "clawd-aura-farm:ext-ups-v1";
 interface LocalExtState {
-  ia: number;
-  portal: number;
   cosmic: number;
   bonusAura: number;
   spentAura: number;
@@ -127,8 +125,6 @@ function loadLocalExt(): LocalExtState {
     const raw = JSON.parse(localStorage.getItem(LOCAL_EXT_KEY) || "null");
     if (raw && typeof raw === "object") {
       return {
-        ia: Math.max(0, Math.floor(Number(raw.ia) || 0)),
-        portal: Math.max(0, Math.floor(Number(raw.portal) || 0)),
         cosmic: Math.max(0, Math.floor(Number(raw.cosmic) || 0)),
         bonusAura: Math.max(0, Number(raw.bonusAura) || 0),
         spentAura: Math.max(0, Number(raw.spentAura) || 0),
@@ -137,14 +133,12 @@ function loadLocalExt(): LocalExtState {
       };
     }
   } catch { /* ignore */ }
-  return { ia: state.upgrades.ia, portal: state.upgrades.portal, cosmic: state.upgrades.cosmic, bonusAura: 0, spentAura: 0, buffUntil: 0, prestige: state.prestige };
+  return { cosmic: state.upgrades.cosmic, bonusAura: 0, spentAura: 0, buffUntil: 0, prestige: state.prestige };
 }
 function saveLocalExt(ext: LocalExtState) {
   try { localStorage.setItem(LOCAL_EXT_KEY, JSON.stringify(ext)); } catch { /* ignore */ }
 }
 const localExt = loadLocalExt();
-state.upgrades.ia = Math.max(state.upgrades.ia, localExt.ia);
-state.upgrades.portal = Math.max(state.upgrades.portal, localExt.portal);
 state.upgrades.cosmic = Math.max(state.upgrades.cosmic, localExt.cosmic);
 if (localExt.buffUntil) state.buffUntil = Math.max(state.buffUntil, localExt.buffUntil);
 if (localExt.prestige) state.prestige = Math.max(state.prestige, localExt.prestige);
@@ -202,8 +196,6 @@ function onServer(r: ServerState, _pending: string) {
   if (firstSync && state.lifetime === 0 && state.prestige === 0 && srv.lifetime > 0) {
     // Dispositivo/navegador novo no site: restaura o estado salvo na nuvem
     state = srv;
-    state.upgrades.ia = Math.max(state.upgrades.ia, localExt.ia);
-    state.upgrades.portal = Math.max(state.upgrades.portal, localExt.portal);
     state.upgrades.cosmic = Math.max(state.upgrades.cosmic, localExt.cosmic);
     try { localStorage.setItem(AURA_RESTORED_KEY, "1"); } catch { /* ignore */ }
     if (r.offline >= 60) welcomeBack(r.offline, r.offline_gain);
@@ -348,8 +340,6 @@ function trackMission(stat: MissionStat, amount = 1) {
 function act(code: string, arg = "") {
   const r = applyEvent(state, code, arg, combo(), now());
   if (code === EV.prestige || code === EV.reset) {
-    localExt.ia = 0;
-    localExt.portal = 0;
     localExt.cosmic = 0;
     localExt.bonusAura = 0;
     localExt.spentAura = 0;
@@ -364,8 +354,6 @@ function act(code: string, arg = "") {
     void sync?.flush();
     return r;
   } else {
-    localExt.ia = state.upgrades.ia;
-    localExt.portal = state.upgrades.portal;
     localExt.cosmic = state.upgrades.cosmic;
     localExt.prestige = state.prestige;
     saveLocalExt(localExt);
@@ -617,11 +605,6 @@ setInterval(() => {
   const t = performance.now();
   const dt = (t - lastTick) / 1000;
   passive(state, dt, now());
-  if (state.upgrades.ia > 0 || state.upgrades.portal > 0) {
-    const extraRate = (1200 * state.upgrades.ia + 3500 * state.upgrades.portal) * mult(state) * (buffActive(state, now()) ? 7 : 1);
-    localExt.bonusAura += extraRate * Math.min(dt, 10);
-    saveLocalExt(localExt);
-  }
   lastTick = t;
   localTick();
   render();
@@ -807,7 +790,7 @@ function renderStats() {
     { label: "Ladrões Capturados", val: String(state.thieves) },
     { label: "Sequência de Dias", val: `${state.streak} dias` },
     { label: "Fichas 67 Disponíveis", val: String(state.tokens) },
-    { label: "Upgrades Comprados", val: `${totalBought}/190` },
+    { label: "Upgrades Comprados", val: `${totalBought}/145` },
     { label: "Conquistas Concluídas", val: `${state.achievements.length}/${ACHIEVEMENTS.length}` },
     { label: "Enfeites Possuídos", val: `${state.owned.length}/${COSMETICS.length}` },
     { label: "Sincronização", val: onlineEnabled ? "🟢 Supabase" : "🟡 Local" },

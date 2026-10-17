@@ -44,7 +44,7 @@ export const THIEF = { min: 240, max: 600, show: 8, slack: 4, tokens: 0 } as con
 export const BUFF_S = 67;
 export const BUFF_MULT = 7;
 
-export type UpgradeId = "aux" | "click" | "crit" | "fab" | "dc" | "ia" | "portal" | "cosmic";
+export type UpgradeId = "aux" | "click" | "crit" | "fab" | "dc" | "cosmic";
 
 export interface Upgrade {
   id: UpgradeId;
@@ -59,19 +59,17 @@ export interface Upgrade {
 
 // A ordem importa: é a mesma do array `ups` no servidor.
 export const UPGRADES: readonly Upgrade[] = [
-  { id: "aux", code: "a", name: "Clawd auxiliar", desc: "+1 de aura por segundo", baseCost: 150, growth: 1.25, max: 40 },
-  { id: "click", code: "m", name: "Mão firme", desc: "+25% de aura por clique", baseCost: 600, growth: 1.38, max: 30 },
-  { id: "crit", code: "s", name: "Olhar sigma", desc: "+2% de chance de crítico", baseCost: 15000, growth: 2.5, max: 10 },
-  { id: "fab", code: "f", name: "Fábrica de 67", desc: "+20 de aura por segundo", baseCost: 8e4, growth: 1.28, max: 30 },
-  { id: "dc", code: "d", name: "Datacenter do Clawd", desc: "+250 de aura por segundo", baseCost: 6e7, growth: 1.32, max: 30 },
-  { id: "ia", code: "i", name: "IA Quântica 67", desc: "+1.200 de aura por segundo", baseCost: 8e8, growth: 1.38, max: 25 },
-  { id: "portal", code: "o", name: "Portal Multiversal", desc: "+3.500/s e +15% no clique", baseCost: 1.2e10, growth: 1.42, max: 20 },
-  { id: "cosmic", code: "x", name: "Aura cósmica", desc: "+50% em toda a aura", baseCost: 2.5e10, growth: 6, max: 5 },
+  { id: "aux", code: "a", name: "Clawd auxiliar", desc: "+2 de aura por segundo", baseCost: 50, growth: 1.18, max: 40 },
+  { id: "click", code: "m", name: "Mão firme", desc: "+50% de aura por clique", baseCost: 200, growth: 1.3, max: 30 },
+  { id: "crit", code: "s", name: "Olhar sigma", desc: "+3% de chance de crítico", baseCost: 5000, growth: 2.2, max: 10 },
+  { id: "fab", code: "f", name: "Fábrica de 67", desc: "+60 de aura por segundo", baseCost: 2e4, growth: 1.22, max: 30 },
+  { id: "dc", code: "d", name: "Datacenter do Clawd", desc: "+4.000 de aura por segundo", baseCost: 2e7, growth: 1.25, max: 30 },
+  { id: "cosmic", code: "x", name: "Aura cósmica", desc: "Dobra toda a aura", baseCost: 3.2e9, growth: 5, max: 5 },
 ];
 
 /**
  * Protocolo de eventos (uma letra cada, menos os enfeites, que levam a letra do item ou do slot):
- *   c clique · g Cérebro Dourado · t ladrão · a m s f d i o x compra de upgrade · p renascer · z zerar
+ *   c clique · g Cérebro Dourado · t ladrão · a m s f d x compra de upgrade · p renascer · z zerar
  *   K<item> comprar enfeite · E<item> equipar · U<slot> tirar
  */
 export const EV = { click: "c", golden: "g", thief: "t", prestige: "p", reset: "z", buyCosmetic: "K", equip: "E", unequip: "U" } as const;
@@ -114,7 +112,7 @@ export const randomSeed = () => 1 + Math.floor(Math.random() * (RNG_MOD - 2));
 
 export const nowSec = () => Date.now() / 1000;
 
-const zeroUpgrades = (): Record<UpgradeId, number> => ({ aux: 0, click: 0, crit: 0, fab: 0, dc: 0, ia: 0, portal: 0, cosmic: 0 });
+const zeroUpgrades = (): Record<UpgradeId, number> => ({ aux: 0, click: 0, crit: 0, fab: 0, dc: 0, cosmic: 0 });
 
 export const newState = (rng = randomSeed()): State => ({
   aura: 0, total: 0, lifetime: 0, upgrades: zeroUpgrades(), rng,
@@ -130,17 +128,17 @@ export function levelOf(total: number): number {
 }
 
 export const mult = (s: State) =>
-  LEVEL_BONUS ** levelOf(s.total) * 1.5 ** s.upgrades.cosmic * (1 + PRESTIGE_BONUS * s.prestige);
+  LEVEL_BONUS ** levelOf(s.total) * 2 ** s.upgrades.cosmic * (1 + PRESTIGE_BONUS * s.prestige);
 
 export const buffActive = (s: State, now: number) => now < s.buffUntil;
 
 /** Ganho de um clique sem crítico, sem combo e sem Mega Brain. */
-export const clickGain = (s: State) => BASE_CLICK * (1 + 0.25 * s.upgrades.click + 0.15 * s.upgrades.portal) * mult(s);
+export const clickGain = (s: State) => BASE_CLICK * (1 + 0.5 * s.upgrades.click) * mult(s);
 
-export const critChance = (s: State) => BASE_CRIT + 0.02 * s.upgrades.crit;
+export const critChance = (s: State) => BASE_CRIT + 0.03 * s.upgrades.crit;
 
 export const passivePerSecond = (s: State) =>
-  (BASE_PASSIVE + 1 * s.upgrades.aux + 20 * s.upgrades.fab + 250 * s.upgrades.dc + 1200 * s.upgrades.ia + 3500 * s.upgrades.portal) * mult(s);
+  (BASE_PASSIVE + 2 * s.upgrades.aux + 60 * s.upgrades.fab + 4000 * s.upgrades.dc) * mult(s);
 
 export function earn(s: State, amount: number) {
   s.aura += amount;

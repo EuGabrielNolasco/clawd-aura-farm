@@ -55,8 +55,8 @@ describe("cliques", () => {
     passive(s, 20);
     for (const c of "c".repeat(40) + "amm" + "c".repeat(20) + "a") applyEvent(s, c);
     expect(s.rng).toBe(23524415);
-    expect(s.total).toBeCloseTo(9554);
-    expect(s.aura).toBeCloseTo(7788);
+    expect(s.total).toBeCloseTo(10827);
+    expect(s.aura).toBeCloseTo(10258);
     expect(s.clicks).toBe(60);
   });
 
@@ -85,10 +85,10 @@ describe("aura passiva", () => {
 
   it("recalcula o ganho ao subir de nível no meio do período", () => {
     const s = newState();
-    s.upgrades.dc = 30;
+    s.upgrades.dc = 10;
     passive(s, 3600);
-    // sem recalcular, seria exatamente 3600 × (2 + 7.500)
-    expect(s.total).toBeGreaterThan(3600 * 7502);
+    // sem recalcular, seria exatamente 3600 × (2 + 40.000)
+    expect(s.total).toBeGreaterThan(3600 * 40002);
   });
 });
 
@@ -199,10 +199,10 @@ describe("loja", () => {
 
   it("aplica os efeitos dos upgrades", () => {
     const s = newState();
-    s.upgrades = { aux: 2, click: 2, crit: 5, fab: 1, dc: 1, ia: 1, portal: 1, cosmic: 1 };
-    expect(passivePerSecond(s)).toBe((2 + 2 + 20 + 250 + 1200 + 3500) * 1.5);
-    expect(clickGain(s)).toBeCloseTo(67 * 1.65 * 1.5);
-    expect(critChance(s)).toBeCloseTo(0.20);
+    s.upgrades = { aux: 2, click: 2, crit: 5, fab: 1, dc: 1, cosmic: 1 };
+    expect(passivePerSecond(s)).toBe((2 + 4 + 60 + 4000) * 2);
+    expect(clickGain(s)).toBe(67 * 2 * 2);
+    expect(critChance(s)).toBeCloseTo(0.25);
   });
 
   it("todo upgrade tem limite, então dá para completar a loja", () => {
