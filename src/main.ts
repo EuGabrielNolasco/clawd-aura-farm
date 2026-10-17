@@ -189,6 +189,17 @@ let settingName = false;
 
 const AURA_RESTORED_KEY = "clawd-aura-farm:aura-restored-v4";
 
+function updateMyRankHeader() {
+  const el = $("my-rank");
+  if (!el) return;
+  const displayNick = myName || "Você";
+  const curLvl = levelOf(state.total);
+  const curRankName = RANKS[curLvl][1];
+  const myPrest = state.prestige || 0;
+  const posText = lastRank ? `#${lastRank}` : (onlineEnabled ? "Classificando…" : "#1");
+  el.innerHTML = `<b>${displayNick}</b> · <span>Posição: <b>${posText}</b></span> · <span>Rank Atual: <span class="rank-badge lv-${curLvl}">${curRankName}</span></span> · <b>⭐ ${myPrest}</b> · <small>${fmtShort(state.lifetime)} vitalícia</small>`;
+}
+
 function onServer(r: ServerState, _pending: string) {
   clockOffset = r.now - nowSec();
   const srv = toState(r);
@@ -244,12 +255,8 @@ function onServer(r: ServerState, _pending: string) {
   }
   lastRank = r.rank;
   lastAhead = r.ahead;
+  updateMyRankHeader();
   const displayNick = myName || r.name;
-  const myLvl = levelOf(state.lifetime);
-  const myPrest = state.prestige || 0;
-  $("my-rank").textContent = displayNick
-    ? `Você é ${displayNick} · #${r.rank ?? 1} · ${RANKS[myLvl][1]} · ⭐ ${myPrest} · ${fmtShort(state.lifetime)} de aura`
-    : "Escolha um apelido abaixo para aparecer no ranking com seu Rank e suas Estrelas!";
   if (displayNick && !nameInputPrefilled) {
     nameInputPrefilled = true;
     const nameEl = $<HTMLInputElement>("name");
@@ -350,7 +357,7 @@ function act(code: string, arg = "") {
     const gAcc = loadGoogleAccount();
     if (gAcc) saveGoogleAccountVault(gAcc.email, activePlayer, state);
     sync?.broadcastCosmetics(myName, state.equipped as Record<string, string>, state.lifetime, state.prestige);
-    sync?.push(code === EV.prestige ? "pz" : "z");
+    sync?.push(code === EV.prestige ? "p" : "z");
     void sync?.flush();
     return r;
   } else {
@@ -564,6 +571,7 @@ function render() {
   applyCosmetics();
   updateEvents();
   updateWheelBadge();
+  updateMyRankHeader();
   if (menu.open) renderMenu();
   save(state);
 }
@@ -616,15 +624,56 @@ mascot.addEventListener("click", farm);
 mascot.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); farm(); } });
 
 $("prestige").addEventListener("click", () => {
+  if (!canPrestige(state)) return;
+  const nextPrestige = state.prestige + 1;
+  if (!confirm(`Renascer? Você volta para NPC sem upgrades, mas ganha o SUPER PRÊMIO DE PRESTÍGIO:\n\n⭐ +1 Estrela (+25% de aura permanente para sempre, fica ⭐×${nextPrestige})\n🎟 +50 Fichas 67 para a Loja de Enfeites\n🎰 +3 Giros grátis na Roleta da Sorte 67\n\nFichas, conquistas, enfeites e ranking continuam intactos!`)) return;
 
-  if (!confirm(`Renascer? Você volta para NPC sem upgrades, mas ganha +25% de aura para sempre (fica ⭐×${state.prestige + 1}). Fichas, enfeites e ranking continuam.`)) return;
+  // 1. Executa o renascimento no motor do jogo
   act(EV.prestige);
+
+  // 2. Prêmios garantidos de renascimento: Fichas 67 e Giros na Roleta!
+  state.tokens += 50;
+  spinsState.spins = addSpin(3);
+  updateWheelBadge();
+
+  // 3. Conquista prestige_1 (Renascido) no primeiro renascimento
+  if (!state.achievements.includes("prestige_1")) {
+    state.achievements.push("prestige_1");
+    state.tokens += 50;
+    spinsState.spins = addSpin(1);
+    updateWheelBadge();
+    toast("🎖 Conquista Desbloqueada: Renascido (+50 Fichas 67 e +1 giro na Roleta!)");
+  }
+
+  save(state);
+  const gAcc = loadGoogleAccount();
+  if (gAcc) saveGoogleAccountVault(gAcc.email, activePlayer, state);
+
+  // 4. Som e banner comemorativo
   sfx.prestige();
   const b = $("banner");
-  b.innerHTML = `<small>RENASCEU</small>⭐ × ${state.prestige}`;
+  b.innerHTML = `<small>RENASCEU!</small>⭐ × ${state.prestige} (+25% AURA)`;
   replay(b, "show");
   fx.flash();
+  applyCosmetics();
+
+  toast(`⭐ PRÊMIO DE PRESTÍGIO CREDITADO! +1 Estrela (+25% aura), +50 Fichas 67 e +3 giros na Roleta!`);
+
+  // 5. Atualiza o rank atual da vida (volta para NPC)
+  level = -1;
   render();
+  updateMyRankHeader();
+
+  // 6. Atualiza imediatamente o ranking
+  if (sync) {
+    sync.broadcastCosmetics(myName, state.equipped as Record<string, string>, state.lifetime, state.prestige);
+    void sync.flush().then(() => {
+      void loadRanking();
+      updateMyRankHeader();
+    });
+  } else {
+    void loadRanking();
+  }
 });
 
 function setShopOpen(open: boolean) {
@@ -654,7 +703,10 @@ function openMenu(t: string) {
   renderedMenu = "";
   if (!menu.open) menu.showModal();
   renderMenu();
-  if (t === "ranking") void loadRanking();
+  if (t === "ranking") {
+    updateMyRankHeader();
+    void loadRanking();
+  }
 }
 for (const b of document.querySelectorAll<HTMLElement>(".menu-open, .tabs [data-tab]")) {
   b.addEventListener("click", () => openMenu(b.dataset.tab!));
@@ -747,7 +799,7 @@ function renderAccount() {
   $("acc-name").textContent = myName || gAcc?.name || "Jogador Anônimo";
   $("acc-status").textContent = sync ? "🟢 Sincronizado na Nuvem" : "🟡 Modo Local (Offline)";
   $("acc-id-short").textContent = "Conta Principal Preservada";
-  $("acc-rank-label").textContent = lastRank ? `#${lastRank} no ranking` : (myName ? `Apelido: ${myName}` : "Sem apelido no ranking");
+  $("acc-rank-label").textContent = `${lastRank ? `#${lastRank} no ranking` : "Classificado"} · Rank Atual: ${RANKS[levelOf(state.total)][1]} · ⭐ ${state.prestige}`;
 
   const accNameInput = document.getElementById("acc-name-input") as HTMLInputElement | null;
   if (accNameInput && document.activeElement !== accNameInput && !accNameInput.value && myName) {
@@ -877,8 +929,8 @@ function rankRow(e: RankRow) {
 
   const rowLifetime = isMe ? Math.max(e.lifetime, state.lifetime) : e.lifetime;
   const rowPrestige = isMe ? Math.max(e.prestige || 0, state.prestige || 0) : (e.prestige || 0);
-  const lvl = levelOf(rowLifetime);
-  const rankTitle = RANKS[lvl][1];
+  const curLvl = isMe ? levelOf(state.total) : levelOf(rowLifetime);
+  const rankTitle = RANKS[curLvl][1];
   const rebirths = rowPrestige;
 
   const pos = document.createElement("span");
@@ -910,8 +962,8 @@ function rankRow(e: RankRow) {
   const subLine = document.createElement("div");
   subLine.className = "rank-sub";
   const badge = document.createElement("span");
-  badge.className = `rank-badge lv-${lvl}`;
-  badge.textContent = rankTitle;
+  badge.className = `rank-badge lv-${curLvl}`;
+  badge.textContent = isMe ? `Rank Atual: ${rankTitle}` : rankTitle;
   subLine.append(badge);
 
   info.append(topLine, subLine);
@@ -955,6 +1007,7 @@ async function loadRanking() {
   for (const b of document.querySelectorAll<HTMLElement>(".subtabs [data-list]")) b.classList.toggle("on", b.dataset.list === list);
   if (!sync) {
     const localRow: RankRow = { rank: 1, name: myName || "Você (Modo Local)", lifetime: state.lifetime, prestige: state.prestige, equipped: state.equipped as Record<string, string>, me: true };
+    updateMyRankHeader();
     renderRankDistribution([localRow]);
     ol.replaceChildren(rankRow(localRow));
     return;
@@ -962,6 +1015,7 @@ async function loadRanking() {
   ol.replaceChildren(Object.assign(document.createElement("li"), { textContent: "Carregando…" }));
   try {
     const rows = list === "top" ? await sync.top() : await sync.around();
+    updateMyRankHeader();
     if (!rows.length) {
       ol.replaceChildren(Object.assign(document.createElement("li"), {
         textContent: list === "around" ? "Escolha um apelido acima para ver quem está perto de você, ou veja a aba Todos!" : "Ninguém ainda. Seja o primeiro!",

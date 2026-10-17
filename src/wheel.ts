@@ -220,9 +220,9 @@ export function saveSpins(s: SpinsState) {
   }
 }
 
-export function addSpin(): number {
+export function addSpin(amount = 1): number {
   const data = readStoredSpins();
-  data.spins = (data.spins || 0) + 1;
+  data.spins = Math.max(0, (data.spins || 0) + amount);
   saveSpins(data);
   return data.spins;
 }

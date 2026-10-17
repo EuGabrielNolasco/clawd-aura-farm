@@ -380,8 +380,7 @@ button:focus-visible { outline: 3px solid var(--ink); outline-offset: 4px; }
 .top li .rank-line { display: flex; align-items: center; gap: .4rem; min-width: 0; }
 .top li .rank-name { font-weight: 700; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .top li .rank-stars { flex: none; font-size: .9rem; color: var(--aura); background: color-mix(in srgb, var(--aura) 16%, transparent); border: 1px solid color-mix(in srgb, var(--aura) 45%, transparent); padding: 0 .35rem; border-radius: 4px; white-space: nowrap; }
-.top li .rank-sub { display: flex; align-items: center; gap: .3rem; flex-wrap: wrap; min-width: 0; }
-.top li .rank-badge { flex: none; font-size: .88rem; color: #6bffe0; background: color-mix(in srgb, #6bffe0 14%, transparent); border: 1px solid color-mix(in srgb, #6bffe0 35%, transparent); padding: 0 .4rem; border-radius: 4px; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.top li .rank-badge, .my-rank .rank-badge { flex: none; font-size: .88rem; color: #6bffe0; background: color-mix(in srgb, #6bffe0 14%, transparent); border: 1px solid color-mix(in srgb, #6bffe0 35%, transparent); padding: 0 .4rem; border-radius: 4px; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; display: inline-block; vertical-align: middle; }
 .top li .rank-aura { flex: none; font-size: 1.2rem; color: var(--aura); white-space: nowrap; }
 .top li.me { outline: 2px solid var(--aura); background: color-mix(in srgb, var(--aura) 18%, transparent); }
 

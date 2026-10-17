@@ -51,7 +51,7 @@ O projeto conta com uma central de documentação completa em [`docs/`](docs/):
   - **Fichas 67 (🎟):** Recebidas exclusivamente com **Conquistas concluídas** e **prêmios ganhos na Roleta da Sorte**.
 - **Loja de Aura com 6 Upgrades (145 níveis):** De *Clawd auxiliar* e *Mão firme* até *Datacenter do Clawd* e *Aura cósmica*, com custos e efeitos originais balanceados.
 - **Loja de Enfeites com 36 Cosméticos:** 8 fundos animados, 8 chapéus, 7 acessórios de rosto, 7 roupas e 6 cores especiais para personalizar o Clawd. O visual equipado fica salvo permanentemente e aparece no avatar do jogador no Ranking Global em tempo real!
-- **Prestígio (Renascer ⭐):** Ao alcançar o nível máximo (*O Próprio 67*), renasça zerando a aura atual e toda a loja para recomeçar do nível *NPC* com **+1 Estrela (⭐)** e **+25% de bônus permanente** em toda a aura, mantendo Fichas 67, Enfeites, Conquistas e Aura Vitalícia no Ranking.
+- **Prestígio (Renascer ⭐):** Ao alcançar o nível máximo (*O Próprio 67*), renasça zerando a aura atual e a loja para recomeçar em *NPC* com o **Super Prêmio de Prestígio**: **+1 Estrela (⭐ com +25% permanente em toda a aura)**, **+50 Fichas 67** e **+3 Giros na Roleta**, mantendo coleção, conquistas e ranking atualizado!
 - **16 níveis com memes BR:** De *NPC* a *O Próprio 67*, passando por *Cria*, *Brabo*, *O Pai Tá On*, *Sigma*, *Mega Brain* e *Coop Thief*.
 - **Combo de cliques e medidor de CPS:** Clicar rápido multiplica a aura dos cliques em até **×3**.
 - **Cérebro Dourado & Ladrão do Coop Thief:** Eventos dinâmicos na tela que ativam o *Modo Mega Brain* (HUD Jarvis e ×7 em toda a aura por 67s) ou recuperam aura roubada e avançam missões diárias.
@@ -158,8 +158,9 @@ Paga com aura. O preço de cada upgrade sobe exponencialmente a cada compra, som
 
 Ao alcançar o nível 15 (*O Próprio 67*), o botão **✨ Renascer** aparece:
 - **Zera a vida atual:** sua Aura atual volta a `0`, o nível volta para `NPC` e todos os 6 upgrades da Loja voltam a `0/máx`.
-- **Ganha +1 Estrela (⭐):** concede **+25% permanentes** em toda a aura gerada em todas as vidas futuras.
+- **Super Prêmio de Prestígio:** concede **+1 Estrela (⭐ com +25% permanente)** em toda a aura de todas as vidas futuras, **+50 Fichas 67** imediatas e **+3 Giros grátis na Roleta da Sorte 67** (além de desbloquear a conquista *Renascido*).
 - **Preserva conquistas e coleção:** suas Fichas 67, seus Enfeites comprados/equipados, suas Conquistas e sua Aura Vitalícia no Ranking Global permanecem intactos.
+- **Ranking Atualizado:** a aba de Ranking reflete instantaneamente seu novo total de Estrelas (⭐) e seu Rank Atual (*NPC* e novos ranks conforme avança).
 
 ## Ranking em tempo real e segurança
 
