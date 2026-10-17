@@ -464,7 +464,7 @@ $("thief").addEventListener("click", () => {
   act(EV.thief);
   $("thief").hidden = true;
   if (state.thieves > prevThieves) {
-    const recoveredAura = Math.max(670, Math.floor(passivePerSecond(state) * 180));
+    const recoveredAura = Math.max(670, Math.floor(passivePerSecond(state) * 60));
     earn(state, recoveredAura);
     localExt.bonusAura += recoveredAura;
     saveLocalExt(localExt);
@@ -569,7 +569,7 @@ setInterval(() => {
   const dt = (t - lastTick) / 1000;
   passive(state, dt, now());
   if (state.upgrades.ia > 0 || state.upgrades.portal > 0) {
-    const extraRate = (150000 * state.upgrades.ia + 5000000 * state.upgrades.portal) * mult(state) * (buffActive(state, now()) ? 7 : 1);
+    const extraRate = (8000 * state.upgrades.ia + 45000 * state.upgrades.portal) * mult(state) * (buffActive(state, now()) ? 7 : 1);
     localExt.bonusAura += extraRate * Math.min(dt, 10);
     saveLocalExt(localExt);
   }
@@ -727,7 +727,7 @@ function renderStats() {
   const grid = $("stats-grid");
   if (!grid) return;
   const lvl = levelOf(state.total);
-  const multVal = LEVEL_BONUS ** lvl * 2 ** state.upgrades.cosmic * (1 + PRESTIGE_BONUS * state.prestige);
+  const multVal = mult(state);
   const critPct = state.clicks > 0 ? ((state.crits / state.clicks) * 100).toFixed(1) : "0.0";
   const totalBought = Object.values(state.upgrades).reduce((a, b) => a + b, 0);
 

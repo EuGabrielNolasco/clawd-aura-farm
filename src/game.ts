@@ -59,14 +59,14 @@ export interface Upgrade {
 
 // A ordem importa: é a mesma do array `ups` no servidor.
 export const UPGRADES: readonly Upgrade[] = [
-  { id: "aux", code: "a", name: "Clawd auxiliar", desc: "+2 de aura por segundo", baseCost: 50, growth: 1.18, max: 40 },
-  { id: "click", code: "m", name: "Mão firme", desc: "+50% de aura por clique", baseCost: 200, growth: 1.3, max: 30 },
-  { id: "crit", code: "s", name: "Olhar sigma", desc: "+3% de chance de crítico", baseCost: 5000, growth: 2.2, max: 10 },
-  { id: "fab", code: "f", name: "Fábrica de 67", desc: "+60 de aura por segundo", baseCost: 2e4, growth: 1.22, max: 30 },
-  { id: "dc", code: "d", name: "Datacenter do Clawd", desc: "+4.000 de aura por segundo", baseCost: 2e7, growth: 1.25, max: 30 },
-  { id: "ia", code: "i", name: "IA Quântica 67", desc: "+150.000 de aura por segundo", baseCost: 1.5e8, growth: 1.26, max: 25 },
-  { id: "portal", code: "o", name: "Portal Multiversal", desc: "+5.000.000/s e +100% no clique", baseCost: 1.2e9, growth: 1.28, max: 20 },
-  { id: "cosmic", code: "x", name: "Aura cósmica", desc: "Dobra toda a aura", baseCost: 3.2e9, growth: 5, max: 5 },
+  { id: "aux", code: "a", name: "Clawd auxiliar", desc: "+1 de aura por segundo", baseCost: 150, growth: 1.25, max: 40 },
+  { id: "click", code: "m", name: "Mão firme", desc: "+25% de aura por clique", baseCost: 600, growth: 1.38, max: 30 },
+  { id: "crit", code: "s", name: "Olhar sigma", desc: "+2% de chance de crítico", baseCost: 15000, growth: 2.5, max: 10 },
+  { id: "fab", code: "f", name: "Fábrica de 67", desc: "+20 de aura por segundo", baseCost: 8e4, growth: 1.28, max: 30 },
+  { id: "dc", code: "d", name: "Datacenter do Clawd", desc: "+800 de aura por segundo", baseCost: 6e7, growth: 1.32, max: 30 },
+  { id: "ia", code: "i", name: "IA Quântica 67", desc: "+8.000 de aura por segundo", baseCost: 6e8, growth: 1.35, max: 25 },
+  { id: "portal", code: "o", name: "Portal Multiversal", desc: "+45.000/s e +35% no clique", baseCost: 8e9, growth: 1.38, max: 20 },
+  { id: "cosmic", code: "x", name: "Aura cósmica", desc: "+50% em toda a aura", baseCost: 1.5e10, growth: 6, max: 5 },
 ];
 
 /**
@@ -130,17 +130,17 @@ export function levelOf(total: number): number {
 }
 
 export const mult = (s: State) =>
-  LEVEL_BONUS ** levelOf(s.total) * 2 ** s.upgrades.cosmic * (1 + PRESTIGE_BONUS * s.prestige);
+  LEVEL_BONUS ** levelOf(s.total) * 1.5 ** s.upgrades.cosmic * (1 + PRESTIGE_BONUS * s.prestige);
 
 export const buffActive = (s: State, now: number) => now < s.buffUntil;
 
 /** Ganho de um clique sem crítico, sem combo e sem Mega Brain. */
-export const clickGain = (s: State) => BASE_CLICK * (1 + 0.5 * s.upgrades.click + 1.0 * s.upgrades.portal) * mult(s);
+export const clickGain = (s: State) => BASE_CLICK * (1 + 0.25 * s.upgrades.click + 0.35 * s.upgrades.portal) * mult(s);
 
-export const critChance = (s: State) => BASE_CRIT + 0.03 * s.upgrades.crit;
+export const critChance = (s: State) => BASE_CRIT + 0.02 * s.upgrades.crit;
 
 export const passivePerSecond = (s: State) =>
-  (BASE_PASSIVE + 2 * s.upgrades.aux + 60 * s.upgrades.fab + 4000 * s.upgrades.dc + 150000 * s.upgrades.ia + 5000000 * s.upgrades.portal) * mult(s);
+  (BASE_PASSIVE + 1 * s.upgrades.aux + 20 * s.upgrades.fab + 800 * s.upgrades.dc + 8000 * s.upgrades.ia + 45000 * s.upgrades.portal) * mult(s);
 
 export function earn(s: State, amount: number) {
   s.aura += amount;

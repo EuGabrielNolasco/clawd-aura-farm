@@ -74,7 +74,7 @@ $$;
 
 create or replace function public.aura_mult(p_total double precision, p_ups int[], p_prestige int) returns double precision
 language sql immutable set search_path = '' as $$
-  select power(1.1::float8, public.aura_level(p_total)) * power(2::float8, coalesce(p_ups[8], 0)) * (1 + 0.25::float8 * p_prestige)
+  select power(1.1::float8, public.aura_level(p_total)) * power(1.5::float8, coalesce(p_ups[8], 0)) * (1 + 0.25::float8 * p_prestige)
 $$;
 drop function if exists public.aura_mult(double precision, int[]);
 
@@ -126,8 +126,8 @@ declare
   v_item record;
   v_ahead jsonb;
   v_slot text;
-  v_base float8[] := array[50, 200, 5000, 2e4, 2e7, 1.5e8, 1.2e9, 3.2e9]::float8[];
-  v_growth float8[] := array[1.18, 1.3, 2.2, 1.22, 1.25, 1.26, 1.28, 5]::float8[];
+  v_base float8[] := array[150, 600, 15000, 8e4, 6e7, 6e8, 8e9, 1.5e10]::float8[];
+  v_growth float8[] := array[1.25, 1.38, 2.5, 1.28, 1.32, 1.35, 1.38, 6]::float8[];
   v_max int[] := array[40, 30, 10, 30, 30, 25, 20, 5];
 begin
   if p_secret is null or length(p_secret) < 32 or length(p_secret) > 128 then
@@ -184,7 +184,7 @@ begin
   for i in 1..40 loop
     exit when v_t >= v_end;
     v_lvl := public.aura_level(p.total);
-    v_rate := (2 + 2 * p.ups[1] + 60 * p.ups[4] + 4000 * p.ups[5] + 150000 * p.ups[6] + 5000000 * p.ups[7]) * public.aura_mult(p.total, p.ups, p.prestige)
+    v_rate := (2 + 1 * p.ups[1] + 20 * p.ups[4] + 800 * p.ups[5] + 8000 * p.ups[6] + 45000 * p.ups[7]) * public.aura_mult(p.total, p.ups, p.prestige)
               * case when v_t < v_buff then 7 else 1 end;
     v_dt := v_end - v_t;
     if v_lvl < 15 then
@@ -230,8 +230,8 @@ begin
       continue when p.click_budget < 1;
       p.click_budget := p.click_budget - 1;
       p.rng := (p.rng * 48271) % 2147483647;
-      v_crit := p.rng::float8 / 2147483647 < 0.1::float8 + 0.03::float8 * p.ups[3];
-      v_gain := 67 * (1 + 0.5::float8 * p.ups[2] + 1.0::float8 * p.ups[7]) * public.aura_mult(p.total, p.ups, p.prestige)
+      v_crit := p.rng::float8 / 2147483647 < 0.1::float8 + 0.02::float8 * p.ups[3];
+      v_gain := 67 * (1 + 0.25::float8 * p.ups[2] + 0.35::float8 * p.ups[7]) * public.aura_mult(p.total, p.ups, p.prestige)
                 * case when v_crit then 10 else 1 end * v_combo * case when v_now < p.buff_until then 7 else 1 end;
       p.aura := p.aura + v_gain;
       p.total := p.total + v_gain;

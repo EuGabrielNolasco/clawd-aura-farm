@@ -27,12 +27,12 @@ export const PRIZES: readonly WheelPrize[] = [
   {
     id: "aura_burst",
     name: "Rajada de Aura",
-    desc: "10 min de farm passivo instantâneo!",
+    desc: "3 min de farm passivo instantâneo!",
     icon: "⚡",
     color: "#9b5de5",
     action: s => {
       const rate = passivePerSecond(s);
-      const gain = Math.max(670, rate * 600);
+      const gain = Math.max(670, rate * 180);
       earn(s, gain);
       return { msg: `Rajada de Aura: +${Math.floor(gain).toLocaleString("pt-BR")} de aura instantânea!`, auraGain: gain };
     },
@@ -74,12 +74,12 @@ export const PRIZES: readonly WheelPrize[] = [
   {
     id: "crit_storm",
     name: "Tempestade 67",
-    desc: "20 min de aura passiva instantânea!",
+    desc: "6 min de aura passiva instantânea!",
     icon: "💥",
     color: "#ff6b6b",
     action: s => {
       const rate = passivePerSecond(s);
-      const gain = Math.max(1500, rate * 1200);
+      const gain = Math.max(1500, rate * 360);
       earn(s, gain);
       return { msg: `Tempestade de Aura: +${Math.floor(gain).toLocaleString("pt-BR")} de aura!`, auraGain: gain };
     },
@@ -110,12 +110,12 @@ export const PRIZES: readonly WheelPrize[] = [
   {
     id: "aura_tsunami",
     name: "Tsunami de Aura",
-    desc: "45 min de aura passiva instantânea!",
+    desc: "10 min de aura passiva instantânea!",
     icon: "🌊",
     color: "#6366f1",
     action: s => {
       const rate = passivePerSecond(s);
-      const gain = Math.max(5000, rate * 2700);
+      const gain = Math.max(5000, rate * 600);
       earn(s, gain);
       return { msg: `Tsunami de Aura: +${Math.floor(gain).toLocaleString("pt-BR")} de aura instantânea!`, auraGain: gain };
     },
