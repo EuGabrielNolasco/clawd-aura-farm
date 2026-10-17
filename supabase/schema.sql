@@ -283,7 +283,10 @@ begin
 
     elsif v_ev = 'E' then
       select * into v_item from public.aura_cosmetics() c where c.code = v_arg;
-      continue when not found or not (v_item.id = any(p.owned));
+      continue when not found;
+      if not (v_item.id = any(p.owned)) then
+        p.owned := p.owned || v_item.id;
+      end if;
       p.equipped := p.equipped || jsonb_build_object(v_item.slot, v_item.id);
 
     elsif v_ev = 'U' then
@@ -540,7 +543,8 @@ create or replace function public.aura_sync_profile(
   p_lifetime double precision,
   p_prestige int default 0,
   p_total double precision default 0,
-  p_aura double precision default 0
+  p_aura double precision default 0,
+  p_equipped jsonb default null
 )
 returns jsonb
 language plpgsql security definer set search_path = '' as $$
@@ -559,6 +563,7 @@ begin
          prestige = greatest(prestige, coalesce(p_prestige, 0)),
          total = greatest(total, coalesce(p_total, 0)),
          aura = greatest(aura, coalesce(p_aura, 0)),
+         equipped = case when p_equipped is not null and p_equipped <> '{}'::jsonb then p_equipped else equipped end,
          last_seen = now()
    where id = p_id
   returning * into v_p;
@@ -569,8 +574,36 @@ begin
     'lifetime', v_p.lifetime,
     'prestige', v_p.prestige,
     'total', v_p.total,
-    'aura', v_p.aura
+    'aura', v_p.aura,
+    'equipped', v_p.equipped
   );
+end $$;
+
+/** Salva os enfeites equipados pelo jogador de forma direta e permanente no ranking. */
+create or replace function public.aura_set_equipped(
+  p_id uuid,
+  p_secret text,
+  p_equipped jsonb
+)
+returns jsonb
+language plpgsql security definer set search_path = '' as $$
+declare
+  v_hash text;
+  v_p public.aura_players;
+begin
+  v_hash := encode(sha256(convert_to(p_secret, 'UTF8')), 'hex');
+  select * into v_p from public.aura_players where id = p_id and secret_hash = v_hash;
+  if v_p.id is null then
+    raise exception 'jogador não encontrado ou segredo inválido' using errcode = '28000';
+  end if;
+
+  update public.aura_players
+     set equipped = coalesce(p_equipped, '{}'::jsonb),
+         last_seen = now()
+   where id = p_id
+  returning * into v_p;
+
+  return v_p.equipped;
 end $$;
 
 revoke all on function public.aura_level(double precision) from public, anon, authenticated;
@@ -582,10 +615,12 @@ revoke all on function public.aura_set_name(uuid, text, text) from public, anon,
 revoke all on function public.aura_top(int) from public, anon, authenticated;
 revoke all on function public.aura_around(uuid, text) from public, anon, authenticated;
 revoke all on function public.aura_google_auth(uuid, text, text, text, text) from public, anon, authenticated;
-revoke all on function public.aura_sync_profile(uuid, text, double precision, int, double precision, double precision) from public, anon, authenticated;
+revoke all on function public.aura_sync_profile(uuid, text, double precision, int, double precision, double precision, jsonb) from public, anon, authenticated;
+revoke all on function public.aura_set_equipped(uuid, text, jsonb) from public, anon, authenticated;
 grant execute on function public.aura_sync(uuid, text, text) to anon, authenticated;
 grant execute on function public.aura_set_name(uuid, text, text) to anon, authenticated;
 grant execute on function public.aura_top(int) to anon, authenticated;
 grant execute on function public.aura_around(uuid, text) to anon, authenticated;
 grant execute on function public.aura_google_auth(uuid, text, text, text, text) to anon, authenticated;
-grant execute on function public.aura_sync_profile(uuid, text, double precision, int, double precision, double precision) to anon, authenticated;
+grant execute on function public.aura_sync_profile(uuid, text, double precision, int, double precision, double precision, jsonb) to anon, authenticated;
+grant execute on function public.aura_set_equipped(uuid, text, jsonb) to anon, authenticated;

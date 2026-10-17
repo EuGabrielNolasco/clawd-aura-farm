@@ -92,7 +92,7 @@ export function deduplicateRankRows(
     const myPrestige = isMe && localProgress ? Math.max(localProgress.prestige, 0) : 0;
     const rowLifetime = Math.max(r.lifetime, live?.lifetime ?? 0, myLifetime);
     const rowPrestige = Math.max(r.prestige ?? 0, live?.prestige ?? 0, myPrestige);
-    const rowEquipped = {
+    const rowEquipped: Record<string, string> = {
       ...(r.equipped ?? {}),
       ...(live?.equipped ?? {}),
       ...(isMe && localProgress?.equipped ? localProgress.equipped : {}),
@@ -113,18 +113,22 @@ export function deduplicateRankRows(
       // mantém o que tem maior aura vitalícia e prestígio
       const pickNewer = rowLifetime > existing.lifetime ||
         (rowLifetime === existing.lifetime && rowPrestige > existing.prestige);
+      const mergedEquipped: Record<string, string> = { ...existing.equipped };
+      for (const [k, v] of Object.entries(rowEquipped)) {
+        if (v) mergedEquipped[k] = v;
+      }
       if (pickNewer) {
         byKey.set(key, {
           rank: existing.rank,
           name: cleanName,
           lifetime: rowLifetime,
           prestige: rowPrestige,
-          equipped: { ...existing.equipped, ...rowEquipped },
+          equipped: mergedEquipped,
           me: existing.me || isMe,
         });
       } else {
         existing.me = existing.me || isMe;
-        existing.equipped = { ...rowEquipped, ...existing.equipped };
+        existing.equipped = mergedEquipped;
       }
     }
   }
@@ -320,7 +324,13 @@ export function createSync(
       localProgress?: { lifetime: number; prestige: number; equipped?: Record<string, string> },
       nameOverride?: string | null
     ) => mergeRankRows(await rpc<RankRow[]>("aura_around", { p_id: p.id, p_secret: p.secret }), localProgress, nameOverride),
-    syncProfile: async (lifetime: number, prestige: number, total: number, aura: number) => {
+    syncProfile: async (
+      lifetime: number,
+      prestige: number,
+      total: number,
+      aura: number,
+      equipped?: Record<string, string>
+    ) => {
       try {
         return await rpc<{
           id: string;
@@ -329,6 +339,7 @@ export function createSync(
           prestige: number;
           total: number;
           aura: number;
+          equipped?: Record<string, string>;
         }>("aura_sync_profile", {
           p_id: p.id,
           p_secret: p.secret,
@@ -336,6 +347,36 @@ export function createSync(
           p_prestige: prestige,
           p_total: total,
           p_aura: aura,
+          p_equipped: equipped || {},
+        });
+      } catch {
+        try {
+          return await rpc<{
+            id: string;
+            name: string | null;
+            lifetime: number;
+            prestige: number;
+            total: number;
+            aura: number;
+          }>("aura_sync_profile", {
+            p_id: p.id,
+            p_secret: p.secret,
+            p_lifetime: lifetime,
+            p_prestige: prestige,
+            p_total: total,
+            p_aura: aura,
+          });
+        } catch {
+          return null;
+        }
+      }
+    },
+    setEquipped: async (equipped: Record<string, string>) => {
+      try {
+        return await rpc<Record<string, string>>("aura_set_equipped", {
+          p_id: p.id,
+          p_secret: p.secret,
+          p_equipped: equipped,
         });
       } catch {
         return null;

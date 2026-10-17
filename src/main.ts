@@ -212,6 +212,9 @@ function enforceLocalCosmetics(serverTokens?: number) {
 
 enforceLocalCosmetics();
 if (myName) sync?.broadcastCosmetics(myName, state.equipped as Record<string, string>, state.lifetime, state.prestige);
+if (sync && Object.keys(state.equipped).length > 0) {
+  void sync.setEquipped(state.equipped as Record<string, string>);
+}
 let nameInputPrefilled = false;
 let settingName = false;
 
@@ -252,8 +255,12 @@ function onServer(r: ServerState, _pending: string) {
         }
       } catch { /* ignore */ }
     }
+    const hasEquipped = Object.keys(state.equipped).length > 0;
     if (state.lifetime > srv.lifetime || state.prestige > srv.prestige) {
-      void sync?.syncProfile(state.lifetime, state.prestige, state.total, state.aura);
+      void sync?.syncProfile(state.lifetime, state.prestige, state.total, state.aura, state.equipped as Record<string, string>);
+    } else if (hasEquipped && Object.keys(srv.equipped || {}).length === 0) {
+      void sync?.setEquipped(state.equipped as Record<string, string>);
+      void sync?.syncProfile(state.lifetime, state.prestige, state.total, state.aura, state.equipped as Record<string, string>);
     }
     state.lifetime = Math.max(state.lifetime, srv.lifetime);
     state.prestige = Math.max(state.prestige, srv.prestige, localExt.prestige || 0);
@@ -272,6 +279,9 @@ function onServer(r: ServerState, _pending: string) {
 
   enforceLocalCosmetics(r.tokens);
   save(state);
+  if (firstSync && Object.keys(state.equipped).length > 0) {
+    void sync?.setEquipped(state.equipped as Record<string, string>);
+  }
   firstSync = false;
 
   if (r.name && !settingName) {
@@ -411,6 +421,8 @@ function act(code: string, arg = "") {
     }
     saveLocalCos(localCos);
     sync?.broadcastCosmetics(myName, state.equipped as Record<string, string>, state.lifetime, state.prestige);
+    void sync?.setEquipped(state.equipped as Record<string, string>);
+    void sync?.syncProfile(state.lifetime, state.prestige, state.total, state.aura, state.equipped as Record<string, string>);
   }
   save(state);
   sync?.push(code + arg);
@@ -698,7 +710,8 @@ $("prestige").addEventListener("click", () => {
   // 6. Atualiza imediatamente o ranking
   if (sync) {
     sync.broadcastCosmetics(myName, state.equipped as Record<string, string>, state.lifetime, state.prestige);
-    void sync.syncProfile(state.lifetime, state.prestige, state.total, state.aura);
+    void sync.setEquipped(state.equipped as Record<string, string>);
+    void sync.syncProfile(state.lifetime, state.prestige, state.total, state.aura, state.equipped as Record<string, string>);
     void sync.flush().then(() => {
       void loadRanking();
       updateMyRankHeader();
@@ -1160,7 +1173,8 @@ async function completeGoogleSignIn(info: { sub: string; email: string; name?: s
 
   // 3. Sincroniza o perfil atualizado na nuvem
   if (sync) {
-    void sync.syncProfile(state.lifetime, state.prestige, state.total, state.aura);
+    void sync.setEquipped(state.equipped as Record<string, string>);
+    void sync.syncProfile(state.lifetime, state.prestige, state.total, state.aura, state.equipped as Record<string, string>);
     void sync.flush();
   }
 
@@ -1392,7 +1406,8 @@ $("btn-paste-token")?.addEventListener("click", async () => {
         save(state);
       }
     } catch { /* ignore */ }
-    void sync.syncProfile(state.lifetime, state.prestige, state.total, state.aura);
+    void sync.setEquipped(state.equipped as Record<string, string>);
+    void sync.syncProfile(state.lifetime, state.prestige, state.total, state.aura, state.equipped as Record<string, string>);
     void sync.flush();
   }
   sfx.welcome();
@@ -1494,6 +1509,8 @@ async function handleNicknameChange(rawName: string, msgEl: HTMLElement | null) 
     if (sync) {
       await sync.setName(enteredName);
       sync.broadcastCosmetics(myName, state.equipped as Record<string, string>, state.lifetime, state.prestige);
+      void sync.setEquipped(state.equipped as Record<string, string>);
+      void sync.syncProfile(state.lifetime, state.prestige, state.total, state.aura, state.equipped as Record<string, string>);
       await sync.flush();
       void loadRanking();
     }

@@ -202,11 +202,15 @@ do $$ declare r jsonb; begin
   assert r->>'action' = 'switched' and (r->>'id')::uuid = pg_temp.pid(1), 'unificação de conta Google falhou: ' || r::text;
 end $$;
 
--- ===== sincronização direta de perfil (aura_sync_profile) =====
+-- ===== sincronização direta de perfil (aura_sync_profile) e enfeites (aura_set_equipped) =====
 do $$ declare r jsonb; begin
-  r := public.aura_sync_profile(pg_temp.pid(1), repeat('s', 32), 22.4e12, 4, 22.4e12, 1e9);
+  r := public.aura_sync_profile(pg_temp.pid(1), repeat('s', 32), 22.4e12, 4, 22.4e12, 1e9, '{"hat":"hat_coroa"}'::jsonb);
   assert (r->>'lifetime')::float8 = 22.4e12, 'aura_sync_profile não atualizou lifetime: ' || r::text;
   assert (r->>'prestige')::int = 4, 'aura_sync_profile não atualizou prestige: ' || r::text;
+  assert r->'equipped'->>'hat' = 'hat_coroa', 'aura_sync_profile não atualizou equipped: ' || r::text;
+
+  r := public.aura_set_equipped(pg_temp.pid(1), repeat('s', 32), '{"hat":"hat_coroa","outfit":"outfit_asas"}'::jsonb);
+  assert r->>'hat' = 'hat_coroa' and r->>'outfit' = 'outfit_asas', 'aura_set_equipped falhou: ' || r::text;
 end $$;
 
 \echo 'servidor: todos os testes passaram'
