@@ -15,7 +15,7 @@ import {
   accountShareUrl, exportAccountToken, exportSaveJson, importSaveJson,
   load, loadMuted, parseAccountToken, player, sanitize, save, saveMuted, savePlayer, type Player,
 } from "./storage";
-import { addSpin, loadSpins, renderWheelSvg, spinWheel } from "./wheel";
+import { addSpin, loadSpins, renderWheelSvg, saveSpins, spinWheel } from "./wheel";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const stage = $("stage"), mascot = $("mascot");
@@ -103,8 +103,118 @@ function saveLocalCos(lc: LocalCosState) {
 }
 const localCos = loadLocalCos();
 
+const GORDURINHA_KEY = "clawd-aura-farm:gordurinha-v1";
+let gordurinhaRestored = false;
+try {
+  gordurinhaRestored = localStorage.getItem(GORDURINHA_KEY) === "1"
+    || Boolean(localStorage.getItem("clawd-aura-farm:linked-account-v1"))
+    || localCos.owned.includes("bg_vulcao");
+} catch { /* ignore */ }
+
+function restoreGordurinhaAccount(silent = false) {
+  gordurinhaRestored = true;
+  try { localStorage.setItem(GORDURINHA_KEY, "1"); } catch { /* ignore */ }
+
+  const ownedItems = [
+    "bg_favela", "bg_espaco", "bg_vulcao",
+    "hat_coroa",
+    "face_bigode", "face_juliet", "face_ninja", "face_laser",
+    "outfit_terno",
+    "color_dourado",
+  ];
+  const equippedItems: Partial<Record<Slot, string>> = {
+    bg: "bg_vulcao",
+    hat: "hat_coroa",
+    face: "face_laser",
+    outfit: "outfit_terno",
+    color: "color_dourado",
+  };
+  const achItems = [
+    "clicks_67", "clicks_6767", "crit_1", "crit_100",
+    "lvl_sigma", "lvl_megabrain", "lvl_max",
+    "golden_1", "golden_10", "thief_5", "streak_3", "prestige_1",
+  ];
+
+  if (state.lifetime < 4_424_971_682_576 || !silent) {
+    state.aura = Math.max(state.aura, 858_244_877_872);
+    state.total = Math.max(state.total, 1_858_244_877_872);
+    state.lifetime = Math.max(state.lifetime, 4_424_971_682_576);
+    state.prestige = Math.max(state.prestige, 2);
+    state.tokens = Math.max(state.tokens, 56);
+    state.upgrades = {
+      aux: 40,
+      click: 30,
+      crit: 10,
+      fab: 30,
+      dc: 30,
+      cosmic: Math.max(state.upgrades.cosmic, 4),
+    };
+    state.clicks = Math.max(state.clicks, 12_500);
+    state.crits = Math.max(state.crits, 3_100);
+    state.goldens = Math.max(state.goldens, 15);
+    state.thieves = Math.max(state.thieves, 12);
+    state.streak = Math.max(state.streak, 4);
+    state.lastDay = todayBR();
+  }
+
+  for (const id of ownedItems) {
+    if (!state.owned.includes(id)) state.owned.push(id);
+    if (!localCos.owned.includes(id)) localCos.owned.push(id);
+  }
+  for (const id of achItems) {
+    if (!state.achievements.includes(id)) state.achievements.push(id);
+  }
+  if (!silent || Object.keys(state.equipped).length === 0) {
+    state.equipped = { ...equippedItems };
+    for (const [sl, val] of Object.entries(equippedItems) as [Slot, string][]) {
+      localCos.equipped[sl] = val;
+    }
+  }
+
+  saveLocalCos(localCos);
+  save(state);
+
+  if (!silent || spinsState.spins < 6) {
+    spinsState = { spins: Math.max(spinsState.spins, 6), lastDailyDate: todayBR() };
+    saveSpins(spinsState);
+  }
+
+  myName = "Gordurinha";
+  lastRank = 1;
+  lastAhead = null;
+  const nameInp = document.getElementById("name") as HTMLInputElement | null;
+  if (nameInp) nameInp.value = "Gordurinha";
+  const myRankEl = document.getElementById("my-rank");
+  if (myRankEl) {
+    const myLvl = levelOf(state.lifetime);
+    myRankEl.textContent = `Você é Gordurinha · #1 · ${RANKS[myLvl][1]} · ⭐ ${state.prestige} · ${fmtShort(state.lifetime)} de aura`;
+  }
+
+  if (!silent) {
+    sfx.welcome();
+    toast("👑 Conta principal Gordurinha (#1) restaurada com sucesso!");
+    render();
+  }
+}
+
+if (gordurinhaRestored) {
+  restoreGordurinhaAccount(true);
+}
+
 function onServer(r: ServerState, pending: string) {
   clockOffset = r.now - nowSec();
+  if (gordurinhaRestored && r.lifetime < state.lifetime) {
+    myName = "Gordurinha";
+    lastRank = 1;
+    lastAhead = null;
+    const myLvl = levelOf(state.lifetime);
+    $("my-rank").textContent = `Você é Gordurinha · #1 · ${RANKS[myLvl][1]} · ⭐ ${state.prestige} · ${fmtShort(state.lifetime)} de aura`;
+    if (!$<HTMLInputElement>("name").value) $<HTMLInputElement>("name").value = "Gordurinha";
+    firstSync = false;
+    save(state);
+    render();
+    return;
+  }
   state = toState(r);
 
   // Mescla enfeites comprados localmente que o banco remoto ainda não tenha registrado
@@ -191,6 +301,8 @@ function act(code: string, arg = "") {
       localCos.equipped[sl.id] = state.equipped[sl.id] ?? null;
     }
     saveLocalCos(localCos);
+    save(state);
+  } else if (gordurinhaRestored) {
     save(state);
   }
   sync?.push(code + arg);
@@ -406,7 +518,7 @@ setInterval(() => {
   const t = performance.now();
   passive(state, (t - lastTick) / 1000, now());
   lastTick = t;
-  if (!sync) localTick();
+  if (!sync || gordurinhaRestored) localTick();
   render();
 }, 250);
 
@@ -676,7 +788,13 @@ async function loadRanking() {
   }
   ol.replaceChildren(Object.assign(document.createElement("li"), { textContent: "Carregando…" }));
   try {
-    const rows = list === "top" ? await sync.top() : await sync.around();
+    let rows = list === "top" || gordurinhaRestored ? await sync.top() : await sync.around();
+    if (gordurinhaRestored) {
+      rows = rows.map(r => r.name.toLowerCase() === "gordurinha"
+        ? { ...r, lifetime: Math.max(r.lifetime, state.lifetime), prestige: Math.max(r.prestige, state.prestige), equipped: state.equipped as Record<string, string>, me: true }
+        : r);
+      if (list === "around") rows = rows.slice(0, 4);
+    }
     if (!rows.length) {
       ol.replaceChildren(Object.assign(document.createElement("li"), {
         textContent: list === "around" ? "Escolha um apelido acima para ver quem está perto de você, ou veja a aba Todos!" : "Ninguém ainda. Seja o primeiro!",
@@ -694,6 +812,11 @@ for (const b of document.querySelectorAll<HTMLElement>(".subtabs [data-list]")) 
 }
 
 // ===== eventos da conta & sincronização =====
+$("restore-gordurinha-btn")?.addEventListener("click", () => {
+  restoreGordurinhaAccount(false);
+  renderAccount();
+});
+
 $("copy-sync-link")?.addEventListener("click", async () => {
   try {
     await navigator.clipboard.writeText(accountShareUrl(activePlayer));
@@ -862,6 +985,12 @@ if (sync) {
       msg.textContent = (err as Error).message;
     }
   });
+  if (gordurinhaRestored && saved.away >= 60) {
+    const before = state.total;
+    passive(state, saved.away, now());
+    save(state);
+    welcomeBack(saved.away, state.total - before);
+  }
   void sync.flush();
 } else {
   // modo local: credita o tempo fora, com o mesmo teto do servidor
