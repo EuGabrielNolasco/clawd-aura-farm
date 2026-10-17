@@ -12,7 +12,7 @@ import { createSync, onlineEnabled, toState, type RankRow, type ServerState } fr
 import { sfx, setMuted } from "./sound";
 import {
   clearGoogleAccount, exportSaveJson, getGoogleClientId, importSaveJson,
-  load, loadGoogleAccount, loadGoogleAccountVault, loadMuted, parseGoogleJwt,
+  load, loadGoogleAccount, loadGoogleAccountVault, loadMuted,
   player, sanitize, save, saveGoogleAccount, saveGoogleAccountVault,
   saveMuted, savePlayer, type Player,
 } from "./storage";
@@ -889,9 +889,53 @@ function completeGoogleSignIn(info: { sub: string; email: string; name?: string;
   render();
 }
 
+async function fetchGoogleUserProfile(accessToken: string) {
+  const msg = $("google-oauth-msg");
+  try {
+    const r = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!r.ok) throw new Error("Falha ao obter perfil do Google.");
+    const data = await r.json();
+    if (data && data.sub && data.email) {
+      completeGoogleSignIn({
+        sub: String(data.sub),
+        email: String(data.email),
+        name: data.name ? String(data.name) : undefined,
+        picture: data.picture ? String(data.picture) : undefined,
+      });
+    }
+  } catch (err) {
+    if (msg) msg.textContent = "Erro ao conectar com Google: " + (err as Error).message;
+  }
+}
+
+// Captura retorno OAuth2 se vier via hash (#access_token=...) na janela ou popup
+try {
+  if (window.location.hash.includes("access_token=")) {
+    const params = new URLSearchParams(window.location.hash.slice(1));
+    const token = params.get("access_token");
+    if (token) {
+      history.replaceState(null, "", window.location.pathname + window.location.search);
+      if (window.opener && window.opener !== window) {
+        window.opener.postMessage({ type: "clawd-google-oauth", accessToken: token }, window.location.origin);
+        window.close();
+      } else {
+        void fetchGoogleUserProfile(token);
+      }
+    }
+  }
+} catch { /* ignore */ }
+
+window.addEventListener("message", ev => {
+  if (ev.origin !== window.location.origin) return;
+  if (ev.data && ev.data.type === "clawd-google-oauth" && typeof ev.data.accessToken === "string") {
+    void fetchGoogleUserProfile(ev.data.accessToken);
+  }
+});
+
 $("google-oauth-btn")?.addEventListener("click", () => {
   const clientId = getGoogleClientId();
-  const msg = $("google-oauth-msg");
   const gWin = window as unknown as GoogleWindow;
 
   if (gWin.google?.accounts?.oauth2) {
@@ -899,40 +943,28 @@ $("google-oauth-btn")?.addEventListener("click", () => {
       client_id: clientId,
       scope: "openid email profile",
       prompt: "select_account",
-      callback: async resp => {
-        if (!resp.access_token) return;
-        try {
-          const r = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
-            headers: { Authorization: `Bearer ${resp.access_token}` },
-          });
-          if (!r.ok) throw new Error("Falha ao obter perfil do Google.");
-          const data = await r.json();
-          if (data && data.sub && data.email) {
-            completeGoogleSignIn({
-              sub: String(data.sub),
-              email: String(data.email),
-              name: data.name ? String(data.name) : undefined,
-              picture: data.picture ? String(data.picture) : undefined,
-            });
-          }
-        } catch (err) {
-          if (msg) msg.textContent = "Erro ao conectar com Google: " + (err as Error).message;
-        }
+      callback: resp => {
+        if (resp.access_token) void fetchGoogleUserProfile(resp.access_token);
       },
     });
     tokenClient.requestAccessToken();
-  } else if (gWin.google?.accounts?.id) {
-    gWin.google.accounts.id.initialize({
-      client_id: clientId,
-      callback: res => {
-        if (!res.credential) return;
-        const parsed = parseGoogleJwt(res.credential);
-        if (parsed) completeGoogleSignIn(parsed);
-      },
-    });
-    gWin.google.accounts.id.prompt();
-  } else {
-    if (msg) msg.textContent = "Carregando login do Google… Tente novamente em 1 segundo.";
+    return;
+  }
+
+  // Fallback direto para a janela oficial do Google OAuth 2.0 caso o script externo tenha sido bloqueado
+  const redirectUri = window.location.origin + window.location.pathname;
+  const authUrl =
+    `https://accounts.google.com/o/oauth2/v2/auth?client_id=${encodeURIComponent(clientId)}` +
+    `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+    `&response_type=token` +
+    `&scope=${encodeURIComponent("openid email profile")}` +
+    `&prompt=select_account`;
+  const w = 500, h = 620;
+  const left = Math.max(0, Math.round(window.screenX + (window.outerWidth - w) / 2));
+  const top = Math.max(0, Math.round(window.screenY + (window.outerHeight - h) / 2));
+  const popup = window.open(authUrl, "google_oauth2_popup", `width=${w},height=${h},left=${left},top=${top}`);
+  if (!popup) {
+    window.location.href = authUrl;
   }
 });
 
