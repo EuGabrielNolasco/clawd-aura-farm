@@ -163,7 +163,7 @@ export function createSync(
   initialPlayer: Player,
   onSync: (r: ServerState, pending: string) => void,
   onStatus: (ok: boolean) => void,
-  onRealtime?: () => void
+  onRealtime?: (meta?: LivePlayerMeta & { playerId?: string; ts?: number }) => void
 ) {
   let p = initialPlayer;
   let queue = "";
@@ -211,18 +211,21 @@ export function createSync(
         try {
           const msg = JSON.parse(String(ev.data));
           if (msg.event === "broadcast" && msg.payload?.event === "cosmetics_update") {
-            applyLiveMeta(msg.payload.payload as LivePlayerMeta);
-            onRealtime?.();
+            const meta = msg.payload.payload as (LivePlayerMeta & { playerId?: string; ts?: number });
+            applyLiveMeta(meta);
+            onRealtime?.(meta);
           } else if (msg.event === "presence_state" && msg.payload && typeof msg.payload === "object") {
-            for (const entry of Object.values(msg.payload) as { metas?: LivePlayerMeta[] }[]) {
-              applyLiveMeta(entry?.metas?.[0]);
+            for (const entry of Object.values(msg.payload) as { metas?: (LivePlayerMeta & { playerId?: string; ts?: number })[] }[]) {
+              const meta = entry?.metas?.[0];
+              applyLiveMeta(meta);
+              if (meta) onRealtime?.(meta);
             }
-            onRealtime?.();
           } else if (msg.event === "presence_diff" && msg.payload?.joins && typeof msg.payload.joins === "object") {
-            for (const entry of Object.values(msg.payload.joins) as { metas?: LivePlayerMeta[] }[]) {
-              applyLiveMeta(entry?.metas?.[0]);
+            for (const entry of Object.values(msg.payload.joins) as { metas?: (LivePlayerMeta & { playerId?: string; ts?: number })[] }[]) {
+              const meta = entry?.metas?.[0];
+              applyLiveMeta(meta);
+              if (meta) onRealtime?.(meta);
             }
-            onRealtime?.();
           }
         } catch { /* ignore */ }
       });
@@ -240,7 +243,8 @@ export function createSync(
     currentPrestige = prestige;
     if (!name) return;
     applyLiveMeta({ name, equipped, lifetime, prestige });
-    const serialized = JSON.stringify({ name, equipped, lifetime: Math.floor(lifetime / 1000), prestige });
+    const payload = { playerId: p.id, name, equipped, lifetime: Math.floor(lifetime / 1000), prestige, ts: Date.now() };
+    const serialized = JSON.stringify(payload);
     if (!force && serialized === lastBroadcastPayload) return;
     lastBroadcastPayload = serialized;
     if (!ws || !wsReady || ws.readyState !== WebSocket.OPEN) return;
@@ -248,13 +252,13 @@ export function createSync(
       ws.send(JSON.stringify({
         topic: "realtime:clawd-cosmetics",
         event: "presence",
-        payload: { event: "track", payload: { name, equipped, lifetime, prestige } },
+        payload: { event: "track", payload },
         ref: String(Date.now()),
       }));
       ws.send(JSON.stringify({
         topic: "realtime:clawd-cosmetics",
         event: "broadcast",
-        payload: { type: "broadcast", event: "cosmetics_update", payload: { name, equipped, lifetime, prestige } },
+        payload: { type: "broadcast", event: "cosmetics_update", payload },
         ref: String(Date.now() + 1),
       }));
     } catch { /* ignore */ }
@@ -314,8 +318,8 @@ export function createSync(
       currentName = name;
       return rpc<void>("aura_set_name", { p_id: p.id, p_secret: p.secret, p_name: name });
     },
-    broadcastCosmetics: (name: string | null, equipped: Record<string, string>, lifetime = 0, prestige = 0) =>
-      sendCosmeticsBroadcast(name, equipped, lifetime, prestige),
+    broadcastCosmetics: (name: string | null, equipped: Record<string, string>, lifetime = 0, prestige = 0, force = false) =>
+      sendCosmeticsBroadcast(name, equipped, lifetime, prestige, force),
     top: async (
       localProgress?: { lifetime: number; prestige: number; equipped?: Record<string, string> },
       nameOverride?: string | null

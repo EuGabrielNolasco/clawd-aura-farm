@@ -104,8 +104,44 @@ const sync = onlineEnabled ? createSync(
     const st = $("acc-status");
     if (st) st.textContent = ok ? "🟢 Conectado na Nuvem" : "🟡 Sem conexão com o servidor";
   },
-  () => {
-    // Quando outro jogador envia atualização via WebSocket, atualiza o ranking ao vivo
+  meta => {
+    // 1. Sincronização instantânea ao vivo entre PC e Celular (mesma conta ou mesmo apelido)
+    if (meta && typeof meta === "object") {
+      const isMyAccount = Boolean(
+        (meta.playerId && meta.playerId === activePlayer.id) ||
+        (myName && meta.name && meta.name.trim().toLowerCase() === myName.trim().toLowerCase())
+      );
+
+      if (isMyAccount && meta.equipped && typeof meta.equipped === "object") {
+        let equippedChanged = false;
+        for (const sl of SLOTS) {
+          const item = meta.equipped[sl.id];
+          if (item && cosmeticById(item)) {
+            if (state.equipped[sl.id] !== item) {
+              state.equipped[sl.id] = item;
+              localCos.equipped[sl.id] = item;
+              if (!state.owned.includes(item)) state.owned.push(item);
+              if (!localCos.owned.includes(item)) localCos.owned.push(item);
+              equippedChanged = true;
+            }
+          } else if (!item && state.equipped[sl.id]) {
+            delete state.equipped[sl.id];
+            delete localCos.equipped[sl.id];
+            equippedChanged = true;
+          }
+        }
+        if (equippedChanged) {
+          save(state);
+          saveLocalCos(localCos);
+          applyCosmetics();
+          render();
+          updateMyRankHeader();
+          if (menu.open) renderMenu();
+        }
+      }
+    }
+
+    // 2. Quando outro jogador envia atualização via WebSocket, atualiza o ranking ao vivo
     if (menu.open && tab === "ranking") {
       void loadRanking(true);
     }
@@ -326,8 +362,8 @@ function onServer(r: ServerState, _pending: string) {
       }
     }
 
-    // 4. Enfeites equipados: se o usuário não mudou localmente nos últimos 3 segundos,
-    // adota o visual oficial da conta que está salvo na nuvem
+    // 4. Enfeites equipados: se o servidor tem itens e o usuário não mudou localmente nos últimos 3 segundos,
+    // sincroniza os itens oficiais salvos
     if (srv.equipped && typeof srv.equipped === "object" && Date.now() - lastLocalEquipTime > 3000) {
       let equippedChanged = false;
       for (const sl of SLOTS) {
@@ -340,10 +376,6 @@ function onServer(r: ServerState, _pending: string) {
             if (!localCos.owned.includes(srvItem)) localCos.owned.push(srvItem);
             equippedChanged = true;
           }
-        } else if (!srvItem && state.equipped[sl.id]) {
-          delete state.equipped[sl.id];
-          delete localCos.equipped[sl.id];
-          equippedChanged = true;
         }
       }
       if (equippedChanged) stateChanged = true;
@@ -526,7 +558,7 @@ function act(code: string, arg = "") {
       localCos.equipped[sl.id] = state.equipped[sl.id] ?? null;
     }
     saveLocalCos(localCos);
-    sync?.broadcastCosmetics(myName, state.equipped as Record<string, string>, state.lifetime, state.prestige);
+    sync?.broadcastCosmetics(myName, state.equipped as Record<string, string>, state.lifetime, state.prestige, true);
     void sync?.setEquipped(state.equipped as Record<string, string>);
     void pushFullProfileSync();
   }
@@ -1085,8 +1117,13 @@ function renderCosmetics() {
           act(EV.equip, c.code);
           sfx.cosmetic();
           toast(`👕 ${c.name} comprado e equipado!`);
-        } else { sfx.denied(); toast(`Faltam ${c.price - state.tokens} Fichas 67 para ${c.name}.`); }
+        } else {
+          sfx.denied();
+          toast(`Faltam ${c.price - state.tokens} Fichas 67 para ${c.name}.`);
+        }
         render();
+        applyCosmetics();
+        renderCosmetics();
       });
       row.append(btn);
     }
