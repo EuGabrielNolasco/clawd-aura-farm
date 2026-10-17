@@ -63,6 +63,103 @@ export function createSync(initialPlayer: Player, onSync: (r: ServerState, pendi
   let inflight = false;
   let paused = false;
 
+  // Mapa em tempo real de enfeites equipados por apelido (complementa o banco para todos os 36 efeitos)
+  const liveEquippedByName = new Map<string, Record<string, string>>();
+  let ws: WebSocket | null = null;
+  let wsReady = false;
+  let lastBroadcastPayload = "";
+  let currentName: string | null = null;
+  let currentEquipped: Record<string, string> = {};
+
+  function connectRealtime() {
+    if (!URL_ || !KEY || typeof WebSocket === "undefined") return;
+    try {
+      const host = new URL(URL_).host;
+      const socket = new WebSocket(`wss://${host}/realtime/v1/websocket?apikey=${encodeURIComponent(KEY)}&vsn=1.0.0`);
+      ws = socket;
+      socket.addEventListener("open", () => {
+        wsReady = true;
+        socket.send(JSON.stringify({
+          topic: "realtime:clawd-cosmetics",
+          event: "phx_join",
+          payload: { config: { broadcast: { self: false }, presence: { key: p.id } } },
+          ref: "1",
+        }));
+        if (currentName) sendCosmeticsBroadcast(currentName, currentEquipped, true);
+      });
+      socket.addEventListener("message", ev => {
+        try {
+          const msg = JSON.parse(String(ev.data));
+          if (msg.event === "broadcast" && msg.payload?.event === "cosmetics_update") {
+            const pl = msg.payload.payload;
+            if (pl && typeof pl.name === "string" && pl.equipped && typeof pl.equipped === "object") {
+              liveEquippedByName.set(pl.name.toLowerCase(), pl.equipped as Record<string, string>);
+            }
+          } else if (msg.event === "presence_state" && msg.payload && typeof msg.payload === "object") {
+            for (const entry of Object.values(msg.payload) as { metas?: { name?: string; equipped?: Record<string, string> }[] }[]) {
+              const meta = entry?.metas?.[0];
+              if (meta && typeof meta.name === "string" && meta.equipped && typeof meta.equipped === "object") {
+                liveEquippedByName.set(meta.name.toLowerCase(), meta.equipped);
+              }
+            }
+          } else if (msg.event === "presence_diff" && msg.payload?.joins && typeof msg.payload.joins === "object") {
+            for (const entry of Object.values(msg.payload.joins) as { metas?: { name?: string; equipped?: Record<string, string> }[] }[]) {
+              const meta = entry?.metas?.[0];
+              if (meta && typeof meta.name === "string" && meta.equipped && typeof meta.equipped === "object") {
+                liveEquippedByName.set(meta.name.toLowerCase(), meta.equipped);
+              }
+            }
+          }
+        } catch { /* ignore */ }
+      });
+      socket.addEventListener("close", () => {
+        wsReady = false;
+        ws = null;
+      });
+    } catch { /* ignore */ }
+  }
+
+  function sendCosmeticsBroadcast(name: string | null, equipped: Record<string, string>, force = false) {
+    currentName = name;
+    currentEquipped = equipped;
+    if (!name) return;
+    liveEquippedByName.set(name.toLowerCase(), equipped);
+    const serialized = JSON.stringify({ name, equipped });
+    if (!force && serialized === lastBroadcastPayload) return;
+    lastBroadcastPayload = serialized;
+    if (!ws || !wsReady || ws.readyState !== WebSocket.OPEN) return;
+    try {
+      ws.send(JSON.stringify({
+        topic: "realtime:clawd-cosmetics",
+        event: "presence",
+        payload: { event: "track", payload: { name, equipped } },
+        ref: String(Date.now()),
+      }));
+      ws.send(JSON.stringify({
+        topic: "realtime:clawd-cosmetics",
+        event: "broadcast",
+        payload: { type: "broadcast", event: "cosmetics_update", payload: { name, equipped } },
+        ref: String(Date.now() + 1),
+      }));
+    } catch { /* ignore */ }
+  }
+
+  connectRealtime();
+  setInterval(() => {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ topic: "phoenix", event: "heartbeat", payload: {}, ref: String(Date.now()) }));
+    } else if (!ws && !paused) {
+      connectRealtime();
+    }
+  }, 25000);
+
+  function mergeRankRows(rows: RankRow[]): RankRow[] {
+    return rows.map(r => {
+      const live = r.name ? liveEquippedByName.get(r.name.toLowerCase()) : undefined;
+      return live ? { ...r, equipped: { ...r.equipped, ...live } } : r;
+    });
+  }
+
   async function flush() {
     if (inflight || paused) return;
     inflight = true;
@@ -99,8 +196,9 @@ export function createSync(initialPlayer: Player, onSync: (r: ServerState, pendi
     getPlayer: () => p,
     setPlayer(newP: Player) { p = newP; queue = ""; },
     setName: (name: string) => rpc<void>("aura_set_name", { p_id: p.id, p_secret: p.secret, p_name: name }),
-    top: () => rpc<RankRow[]>("aura_top", { p_limit: 50 }),
-    around: () => rpc<RankRow[]>("aura_around", { p_id: p.id, p_secret: p.secret }),
+    broadcastCosmetics: (name: string | null, equipped: Record<string, string>) => sendCosmeticsBroadcast(name, equipped),
+    top: async () => mergeRankRows(await rpc<RankRow[]>("aura_top", { p_limit: 50 })),
+    around: async () => mergeRankRows(await rpc<RankRow[]>("aura_around", { p_id: p.id, p_secret: p.secret })),
   };
 }
 

@@ -5,8 +5,10 @@ import { defineConfig, loadEnv, type Plugin } from "vite";
  * conversa com o Supabase do ranking. Fica fora do dev porque o Vite injeta scripts para o HMR.
  */
 function csp(supabaseUrl: string | undefined): Plugin {
+  const supaOrigin = supabaseUrl ? new URL(supabaseUrl).origin : "";
+  const supaWs = supabaseUrl ? `wss://${new URL(supabaseUrl).host}` : "";
   const connect = supabaseUrl
-    ? `'self' ${new URL(supabaseUrl).origin} https://accounts.google.com https://www.googleapis.com`
+    ? `'self' ${supaOrigin} ${supaWs} https://accounts.google.com https://www.googleapis.com`
     : "'self' https://accounts.google.com https://www.googleapis.com";
   const policy = [
     "default-src 'self'",

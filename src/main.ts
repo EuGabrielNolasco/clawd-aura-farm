@@ -16,7 +16,7 @@ import {
   player, sanitize, save, saveGoogleAccount, saveGoogleAccountVault,
   saveMuted, savePlayer, type Player,
 } from "./storage";
-import { addSpin, loadSpins, renderWheelSvg, saveSpins, spinWheel } from "./wheel";
+import { addSpin, loadSpins, renderWheelSvg, spinWheel } from "./wheel";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const stage = $("stage"), mascot = $("mascot");
@@ -86,6 +86,8 @@ const LOCAL_COS_KEY = "clawd-aura-farm:cos-v1";
 interface LocalCosState {
   owned: string[];
   equipped: Partial<Record<Slot, string | null>>;
+  localBought: string[];
+  name?: string | null;
 }
 function loadLocalCos(): LocalCosState {
   try {
@@ -94,59 +96,28 @@ function loadLocalCos(): LocalCosState {
       return {
         owned: Array.isArray(raw.owned) ? raw.owned.filter((x: unknown): x is string => typeof x === "string") : [],
         equipped: raw.equipped && typeof raw.equipped === "object" ? raw.equipped : {},
+        localBought: Array.isArray(raw.localBought) ? raw.localBought.filter((x: unknown): x is string => typeof x === "string") : [],
+        name: typeof raw.name === "string" ? raw.name : null,
       };
     }
   } catch { /* ignore */ }
-  return { owned: [...state.owned], equipped: { ...state.equipped } };
+  return { owned: [...state.owned], equipped: { ...state.equipped }, localBought: [], name: null };
 }
 function saveLocalCos(lc: LocalCosState) {
   try { localStorage.setItem(LOCAL_COS_KEY, JSON.stringify(lc)); } catch { /* ignore */ }
 }
 const localCos = loadLocalCos();
+if (localCos.name) myName = localCos.name;
 
-const GORDURINHA_OWNED = [
-  "bg_favela", "bg_espaco", "bg_vulcao",
-  "hat_coroa",
-  "face_bigode", "face_juliet", "face_ninja", "face_laser",
-  "outfit_terno",
-  "color_dourado",
-];
-
-const GORDURINHA_EQUIPPED_DEFAULT: Partial<Record<Slot, string>> = {
-  bg: "bg_vulcao",
-  hat: "hat_coroa",
-  face: "face_laser",
-  outfit: "outfit_terno",
-  color: "color_dourado",
-};
-
-const GORDURINHA_SEEDED_KEY = "clawd-aura-farm:gordurinha-seeded-v2";
-
-function seedTopAccountCosmetics(forceResetEquipped = false) {
-  let changed = false;
-  for (const id of GORDURINHA_OWNED) {
-    if (!state.owned.includes(id)) { state.owned.push(id); changed = true; }
-    if (!localCos.owned.includes(id)) { localCos.owned.push(id); changed = true; }
-  }
-  const alreadySeeded = localStorage.getItem(GORDURINHA_SEEDED_KEY) === "1";
-  for (const [sl, val] of Object.entries(GORDURINHA_EQUIPPED_DEFAULT) as [Slot, string][]) {
-    if (forceResetEquipped || (!alreadySeeded && localCos.equipped[sl] === undefined)) {
-      localCos.equipped[sl] = val;
-      changed = true;
-    }
-  }
-  if (!alreadySeeded) {
-    try { localStorage.setItem(GORDURINHA_SEEDED_KEY, "1"); } catch { /* ignore */ }
-  }
-  if (changed) saveLocalCos(localCos);
-  enforceLocalCosmetics(false);
-}
-
-function enforceLocalCosmetics(deductTokens = false) {
+function enforceLocalCosmetics(serverOwned?: string[]) {
   for (const id of localCos.owned) {
     if (!state.owned.includes(id) && cosmeticById(id)) {
       state.owned.push(id);
-      if (deductTokens && !GORDURINHA_OWNED.includes(id)) {
+    }
+  }
+  if (serverOwned) {
+    for (const id of localCos.localBought) {
+      if (!serverOwned.includes(id) && cosmeticById(id)) {
         const price = cosmeticById(id)?.price ?? 0;
         state.tokens = Math.max(0, state.tokens - price);
       }
@@ -161,115 +132,45 @@ function enforceLocalCosmetics(deductTokens = false) {
   }
 }
 
-const GORDURINHA_KEY = "clawd-aura-farm:gordurinha-v1";
-let gordurinhaRestored = false;
-try {
-  gordurinhaRestored = localStorage.getItem(GORDURINHA_KEY) === "1"
-    || Boolean(localStorage.getItem("clawd-aura-farm:linked-account-v1"))
-    || Boolean(localStorage.getItem("clawd-aura-farm:google-oauth-v1"))
-    || state.lifetime >= 1_000_000_000_000
-    || localCos.owned.includes("bg_vulcao");
-} catch { /* ignore */ }
-
-function restoreGordurinhaAccount(silent = false) {
-  gordurinhaRestored = true;
-  try { localStorage.setItem(GORDURINHA_KEY, "1"); } catch { /* ignore */ }
-
-  const achItems = [
-    "clicks_67", "clicks_6767", "crit_1", "crit_100",
-    "lvl_sigma", "lvl_megabrain", "lvl_max",
-    "golden_1", "golden_10", "thief_5", "streak_3", "prestige_1",
-  ];
-
-  if (state.lifetime < 4_424_971_682_576 || !silent) {
-    state.aura = Math.max(state.aura, 858_244_877_872);
-    state.total = Math.max(state.total, 1_858_244_877_872);
-    state.lifetime = Math.max(state.lifetime, 4_424_971_682_576);
-    state.prestige = Math.max(state.prestige, 2);
-    state.tokens = Math.max(state.tokens, 56);
-    state.upgrades = {
-      aux: 40,
-      click: 30,
-      crit: 10,
-      fab: 30,
-      dc: 30,
-      cosmic: Math.max(state.upgrades.cosmic, 4),
-    };
-    state.clicks = Math.max(state.clicks, 12_500);
-    state.crits = Math.max(state.crits, 3_100);
-    state.goldens = Math.max(state.goldens, 15);
-    state.thieves = Math.max(state.thieves, 12);
-    state.streak = Math.max(state.streak, 4);
-    state.lastDay = todayBR();
-  }
-
-  for (const id of achItems) {
-    if (!state.achievements.includes(id)) state.achievements.push(id);
-  }
-  seedTopAccountCosmetics(!silent);
-  save(state);
-
-  if (!silent || spinsState.spins < 6) {
-    spinsState = { spins: Math.max(spinsState.spins, 6), lastDailyDate: todayBR() };
-    saveSpins(spinsState);
-  }
-
-  if (!myName) myName = "Diogo Nolasco";
-  lastRank = 1;
-  lastAhead = null;
-  const nameInp = document.getElementById("name") as HTMLInputElement | null;
-  if (nameInp && !nameInp.value) nameInp.value = myName;
-  const myRankEl = document.getElementById("my-rank");
-  if (myRankEl) {
-    const myLvl = levelOf(state.lifetime);
-    myRankEl.textContent = `Você é ${myName} · #1 · ${RANKS[myLvl][1]} · ⭐ ${state.prestige} · ${fmtShort(state.lifetime)} de aura`;
-  }
-
-  if (!silent) {
-    sfx.welcome();
-    toast("👑 Conta principal (#1) restaurada com sucesso!");
-    render();
-  }
-}
-
-if (gordurinhaRestored) {
-  restoreGordurinhaAccount(true);
-} else {
-  enforceLocalCosmetics(false);
-}
+enforceLocalCosmetics();
+if (myName) sync?.broadcastCosmetics(myName, state.equipped as Record<string, string>);
 
 function onServer(r: ServerState, pending: string) {
   clockOffset = r.now - nowSec();
-  if (r.rank === 1 || r.lifetime >= 1_000_000_000_000) {
-    gordurinhaRestored = true;
-    seedTopAccountCosmetics(false);
-  }
-  if (gordurinhaRestored && r.lifetime < state.lifetime) {
-    enforceLocalCosmetics(false);
-    myName = r.name || myName || "Diogo Nolasco";
-    lastRank = 1;
-    lastAhead = null;
-    const myLvl = levelOf(state.lifetime);
-    $("my-rank").textContent = `Você é ${myName} · #1 · ${RANKS[myLvl][1]} · ⭐ ${state.prestige} · ${fmtShort(state.lifetime)} de aura`;
-    if (!$<HTMLInputElement>("name").value) $<HTMLInputElement>("name").value = myName;
-    firstSync = false;
-    save(state);
-    render();
-    return;
-  }
+  const prevState = state;
   state = toState(r);
-  if (gordurinhaRestored) seedTopAccountCosmetics(false);
-  enforceLocalCosmetics(true);
+
+  // Se o progresso local for maior (ex: jogou offline ou restaurou backup), preserva os maiores valores
+  if (prevState.lifetime > state.lifetime) {
+    state.aura = Math.max(state.aura, prevState.aura);
+    state.total = Math.max(state.total, prevState.total);
+    state.lifetime = Math.max(state.lifetime, prevState.lifetime);
+    state.prestige = Math.max(state.prestige, prevState.prestige);
+    state.tokens = Math.max(state.tokens, prevState.tokens);
+    for (const u of UPGRADES) {
+      state.upgrades[u.id] = Math.max(state.upgrades[u.id], prevState.upgrades[u.id]);
+    }
+    for (const a of prevState.achievements) {
+      if (!state.achievements.includes(a)) state.achievements.push(a);
+    }
+  }
+
+  enforceLocalCosmetics(r.owned ?? []);
 
   for (const [c, a] of parseEvents(pending)) applyEvent(state, c, a, combo(), now());
-  enforceLocalCosmetics(false);
+  enforceLocalCosmetics();
   save(state);
   if (firstSync && r.offline >= 60) welcomeBack(r.offline, r.offline_gain);
   if (r.daily > 0) dailyReward(r.daily, state.streak);
   for (const id of r.new_achievements ?? []) achievementUnlocked(id);
   firstSync = false;
 
-  myName = r.name;
+  if (r.name) {
+    myName = r.name;
+    localCos.name = r.name;
+    saveLocalCos(localCos);
+  }
+  sync?.broadcastCosmetics(myName, state.equipped as Record<string, string>);
   if (r.name && lastRank && r.rank && r.rank < lastRank && lastAhead) {
     toast(`🚀 Você passou ${lastAhead.name}! Agora é #${r.rank} no ranking.`);
     sfx.overtake();
@@ -322,6 +223,12 @@ function achievementUnlocked(id: string) {
 function act(code: string, arg = "") {
   const r = applyEvent(state, code, arg, combo(), now());
   if (code === EV.buyCosmetic || code === EV.equip || code === EV.unequip) {
+    if (code === EV.buyCosmetic) {
+      const bought = COSMETICS.find(x => x.code === arg);
+      if (bought && state.owned.includes(bought.id) && !localCos.localBought.includes(bought.id)) {
+        localCos.localBought.push(bought.id);
+      }
+    }
     for (const id of state.owned) {
       if (!localCos.owned.includes(id)) localCos.owned.push(id);
     }
@@ -330,8 +237,7 @@ function act(code: string, arg = "") {
     }
     saveLocalCos(localCos);
     save(state);
-  } else if (gordurinhaRestored) {
-    save(state);
+    sync?.broadcastCosmetics(myName, state.equipped as Record<string, string>);
   }
   sync?.push(code + arg);
   return r;
@@ -555,7 +461,7 @@ setInterval(() => {
   const t = performance.now();
   passive(state, (t - lastTick) / 1000, now());
   lastTick = t;
-  if (!sync || gordurinhaRestored) localTick();
+  if (!sync) localTick();
   render();
 }, 250);
 
@@ -762,8 +668,7 @@ function rankRow(e: RankRow) {
   const isMe = Boolean(
     e.me ||
     (myName && e.name.toLowerCase() === myName.toLowerCase()) ||
-    (lastRank !== null && e.rank === lastRank) ||
-    (gordurinhaRestored && e.rank === 1)
+    (lastRank !== null && e.rank === lastRank)
   );
   if (isMe) li.className = "me";
 
@@ -859,13 +764,7 @@ async function loadRanking() {
   }
   ol.replaceChildren(Object.assign(document.createElement("li"), { textContent: "Carregando…" }));
   try {
-    let rows = list === "top" || gordurinhaRestored ? await sync.top() : await sync.around();
-    if (gordurinhaRestored) {
-      rows = rows.map(r => (r.me || (myName && r.name.toLowerCase() === myName.toLowerCase()) || r.rank === 1)
-        ? { ...r, lifetime: Math.max(r.lifetime, state.lifetime), prestige: Math.max(r.prestige, state.prestige), equipped: { ...r.equipped, ...(state.equipped as Record<string, string>) }, me: true }
-        : r);
-      if (list === "around") rows = rows.slice(0, 4);
-    }
+    const rows = list === "top" ? await sync.top() : await sync.around();
     if (!rows.length) {
       ol.replaceChildren(Object.assign(document.createElement("li"), {
         textContent: list === "around" ? "Escolha um apelido acima para ver quem está perto de você, ou veja a aba Todos!" : "Ninguém ainda. Seja o primeiro!",
@@ -906,7 +805,7 @@ function completeGoogleSignIn(info: { sub: string; email: string; name?: string;
   const normEmail = info.email.trim().toLowerCase();
 
   // Se o navegador for novo (sem conta), restaura o progresso salvo para esse Google
-  if (state.lifetime === 0 && !gordurinhaRestored) {
+  if (state.lifetime === 0) {
     const vault = loadGoogleAccountVault(normEmail);
     if (vault) {
       activePlayer = vault.player;
@@ -1029,11 +928,6 @@ $("google-signout-btn")?.addEventListener("click", () => {
   renderAccount();
 });
 
-$("restore-gordurinha-btn")?.addEventListener("click", () => {
-  restoreGordurinhaAccount(false);
-  renderAccount();
-});
-
 $("btn-export-json")?.addEventListener("click", () => {
   const json = exportSaveJson(state, activePlayer);
   const blob = new Blob([json], { type: "application/json" });
@@ -1105,7 +999,12 @@ if (sync) {
     const msg = $("name-msg");
     msg.textContent = "Salvando…";
     try {
-      await sync.setName($<HTMLInputElement>("name").value);
+      const enteredName = $<HTMLInputElement>("name").value.trim();
+      await sync.setName(enteredName);
+      myName = enteredName;
+      localCos.name = enteredName;
+      saveLocalCos(localCos);
+      sync.broadcastCosmetics(myName, state.equipped as Record<string, string>);
       msg.textContent = "Apelido salvo!";
       await sync.flush();
       void loadRanking();
@@ -1113,12 +1012,6 @@ if (sync) {
       msg.textContent = (err as Error).message;
     }
   });
-  if (gordurinhaRestored && saved.away >= 60) {
-    const before = state.total;
-    passive(state, saved.away, now());
-    save(state);
-    welcomeBack(saved.away, state.total - before);
-  }
   void sync.flush();
 } else {
   // modo local: credita o tempo fora, com o mesmo teto do servidor
@@ -1130,7 +1023,7 @@ if (sync) {
   localTick();
 }
 
-if (!loadGoogleAccount() && state.lifetime === 0 && !gordurinhaRestored && getGoogleClientId()) {
+if (!loadGoogleAccount() && state.lifetime === 0 && getGoogleClientId()) {
   menu.classList.add("auth-required");
   openMenu("account");
 }

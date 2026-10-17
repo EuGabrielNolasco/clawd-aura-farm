@@ -73,15 +73,15 @@ describe("storage e sincronização de contas", () => {
   it("decodifica payload JWT do Google OAuth 2.0", () => {
     const payload = btoa(JSON.stringify({
       sub: "10987654321",
-      email: "DiogoGamer1704@gmail.com",
-      name: "Diogo Nolasco",
+      email: "JogadorTeste@exemplo.com",
+      name: "Jogador Teste",
     }));
     const fakeJwt = `eyJhbGciOiJSUzI1NiJ9.${payload}.assinatura`;
     const parsed = parseGoogleJwt(fakeJwt);
     expect(parsed).toEqual({
       sub: "10987654321",
-      email: "diogogamer1704@gmail.com",
-      name: "Diogo Nolasco",
+      email: "jogadorteste@exemplo.com",
+      name: "Jogador Teste",
       picture: undefined,
     });
     expect(parseGoogleJwt("invalido")).toBeNull();
