@@ -329,7 +329,11 @@ export function createSync(
       prestige: number,
       total: number,
       aura: number,
-      equipped?: Record<string, string>
+      equipped?: Record<string, string>,
+      ups?: number[],
+      tokens?: number,
+      achievements?: string[],
+      owned?: string[]
     ) => {
       try {
         return await rpc<{
@@ -339,7 +343,11 @@ export function createSync(
           prestige: number;
           total: number;
           aura: number;
+          tokens: number;
+          ups: number[];
           equipped?: Record<string, string>;
+          achievements?: string[];
+          owned?: string[];
         }>("aura_sync_profile", {
           p_id: p.id,
           p_secret: p.secret,
@@ -348,6 +356,10 @@ export function createSync(
           p_total: total,
           p_aura: aura,
           p_equipped: equipped || {},
+          p_ups: ups || null,
+          p_tokens: typeof tokens === "number" ? tokens : null,
+          p_achievements: achievements || null,
+          p_owned: owned || null,
         });
       } catch {
         try {
@@ -358,6 +370,7 @@ export function createSync(
             prestige: number;
             total: number;
             aura: number;
+            equipped?: Record<string, string>;
           }>("aura_sync_profile", {
             p_id: p.id,
             p_secret: p.secret,
@@ -365,6 +378,7 @@ export function createSync(
             p_prestige: prestige,
             p_total: total,
             p_aura: aura,
+            p_equipped: equipped || {},
           });
         } catch {
           return null;

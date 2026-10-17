@@ -209,6 +209,15 @@ do $$ declare r jsonb; begin
   assert (r->>'prestige')::int = 4, 'aura_sync_profile não atualizou prestige: ' || r::text;
   assert r->'equipped'->>'hat' = 'hat_coroa', 'aura_sync_profile não atualizou equipped: ' || r::text;
 
+  r := public.aura_sync_profile(
+    pg_temp.pid(1), repeat('s', 32), 25e12, 4, 25e12, 2e9,
+    '{"hat":"hat_coroa","color":"color_neon"}'::jsonb,
+    '{40,30,10,30,30,5}'::int[], 395, '{"speed_demon"}'::text[], '{"bg_favela"}'::text[]
+  );
+  assert r->'ups' = '[40,30,10,30,30,5]'::jsonb, 'aura_sync_profile não atualizou ups: ' || r::text;
+  assert (r->>'tokens')::int = 395, 'aura_sync_profile não atualizou tokens: ' || r::text;
+  assert r->'equipped'->>'color' = 'color_neon', 'aura_sync_profile não atualizou color: ' || r::text;
+
   r := public.aura_set_equipped(pg_temp.pid(1), repeat('s', 32), '{"hat":"hat_coroa","outfit":"outfit_asas"}'::jsonb);
   assert r->>'hat' = 'hat_coroa' and r->>'outfit' = 'outfit_asas', 'aura_set_equipped falhou: ' || r::text;
 end $$;

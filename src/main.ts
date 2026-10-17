@@ -178,6 +178,31 @@ function getAchievementTokens(): number {
   }, 0);
 }
 
+function pushFullProfileSync() {
+  if (!sync) return Promise.resolve(null);
+  const upsArr = [
+    state.upgrades.aux,
+    state.upgrades.click,
+    state.upgrades.crit,
+    state.upgrades.fab,
+    state.upgrades.dc,
+    state.upgrades.cosmic,
+  ];
+  return sync.syncProfile(
+    state.lifetime,
+    state.prestige,
+    state.total,
+    state.aura,
+    state.equipped as Record<string, string>,
+    upsArr,
+    state.tokens,
+    state.achievements,
+    state.owned
+  );
+}
+
+let lastLocalEquipTime = 0;
+
 function enforceLocalCosmetics(serverTokens?: number) {
   for (const id of localCos.owned) {
     if (!state.owned.includes(id) && cosmeticById(id)) {
@@ -187,23 +212,23 @@ function enforceLocalCosmetics(serverTokens?: number) {
   for (const [slot, val] of Object.entries(localCos.equipped) as [Slot, string | null | undefined][]) {
     if (val === null) {
       delete state.equipped[slot];
-    } else if (val && state.owned.includes(val) && cosmeticById(val)) {
+    } else if (val && state.owned.includes(val) && cosmeticById(val) && !state.equipped[slot]) {
       state.equipped[slot] = val;
     }
   }
 
-  // Restaura e preserva o maior saldo legítimo de Fichas 67 obtidas em qualquer dispositivo, conquistas ou roleta
+  // Preserva e sincroniza o saldo de Fichas 67 entre os aparelhos
   const wheelTokens = getWheelTokensWon();
   const achTokens = getAchievementTokens();
-  const srvTok = typeof serverTokens === "number" ? serverTokens : 0;
-  state.tokens = Math.max(state.tokens, srvTok, achTokens + wheelTokens);
+  if (typeof serverTokens === "number" && serverTokens > 0) {
+    state.tokens = serverTokens;
+  } else {
+    state.tokens = Math.max(state.tokens, achTokens + wheelTokens);
+  }
 }
 
 enforceLocalCosmetics();
 if (myName) sync?.broadcastCosmetics(myName, state.equipped as Record<string, string>, state.lifetime, state.prestige);
-if (sync && Object.keys(state.equipped).length > 0) {
-  void sync.setEquipped(state.equipped as Record<string, string>);
-}
 let nameInputPrefilled = false;
 let settingName = false;
 
@@ -227,6 +252,9 @@ function onServer(r: ServerState, _pending: string) {
     // Dispositivo/navegador novo no site: restaura o estado salvo na nuvem
     state = srv;
     state.upgrades.cosmic = Math.max(state.upgrades.cosmic, localExt.cosmic);
+    localCos.owned = [...srv.owned];
+    localCos.equipped = { ...srv.equipped };
+    saveLocalCos(localCos);
     if (r.offline >= 60) welcomeBack(r.offline, r.offline_gain);
     stateChanged = true;
   } else {
@@ -259,7 +287,7 @@ function onServer(r: ServerState, _pending: string) {
       }
     }
 
-    // 2. Progresso vitalício, fichas 67 e estatísticas cumulativas (sempre o máximo de ambos)
+    // 2. Progresso vitalício e estatísticas cumulativas (sempre o máximo de ambos)
     if (srv.lifetime > state.lifetime) {
       state.lifetime = srv.lifetime;
       stateChanged = true;
@@ -267,9 +295,11 @@ function onServer(r: ServerState, _pending: string) {
     state.prestige = Math.max(state.prestige, srv.prestige, localExt.prestige || 0);
 
     const serverTokens = typeof r.tokens === "number" ? r.tokens : 0;
-    if (serverTokens > state.tokens) {
-      state.tokens = serverTokens;
-      stateChanged = true;
+    if (serverTokens !== state.tokens) {
+      if (serverTokens > state.tokens || (srv.owned.length >= state.owned.length && serverTokens > 0)) {
+        state.tokens = serverTokens;
+        stateChanged = true;
+      }
     }
 
     state.clicks = Math.max(state.clicks, srv.clicks ?? 0);
@@ -296,35 +326,48 @@ function onServer(r: ServerState, _pending: string) {
       }
     }
 
-    // 4. Enfeites equipados: se o servidor tem e local não tem para o slot
-    if (srv.equipped && typeof srv.equipped === "object") {
-      for (const [slot, item] of Object.entries(srv.equipped)) {
-        if (item && !state.equipped[slot as Slot] && cosmeticById(item)) {
-          state.equipped[slot as Slot] = item;
-          localCos.equipped[slot as Slot] = item;
-          stateChanged = true;
+    // 4. Enfeites equipados: se o usuário não mudou localmente nos últimos 3 segundos,
+    // adota o visual oficial da conta que está salvo na nuvem
+    if (srv.equipped && typeof srv.equipped === "object" && Date.now() - lastLocalEquipTime > 3000) {
+      let equippedChanged = false;
+      for (const sl of SLOTS) {
+        const srvItem = srv.equipped[sl.id];
+        if (srvItem && cosmeticById(srvItem)) {
+          if (state.equipped[sl.id] !== srvItem) {
+            state.equipped[sl.id] = srvItem;
+            localCos.equipped[sl.id] = srvItem;
+            if (!state.owned.includes(srvItem)) state.owned.push(srvItem);
+            if (!localCos.owned.includes(srvItem)) localCos.owned.push(srvItem);
+            equippedChanged = true;
+          }
+        } else if (!srvItem && state.equipped[sl.id]) {
+          delete state.equipped[sl.id];
+          delete localCos.equipped[sl.id];
+          equippedChanged = true;
         }
       }
+      if (equippedChanged) stateChanged = true;
     }
   }
 
-  // 5. Se o dispositivo local possui MAIS progresso que o servidor, envia syncProfile para atualizar a nuvem
+  // 5. Se o dispositivo local possui MAIS progresso que o servidor, envia syncProfile completo para atualizar a nuvem
   const serverTokens = typeof r.tokens === "number" ? r.tokens : 0;
+  const localHasHigherUps = UPGRADES.some(u => (state.upgrades[u.id] ?? 0) > (srv.upgrades[u.id] ?? 0));
+  const localHasMoreOwned = state.owned.some(id => !srv.owned.includes(id));
+  const localHasMoreAch = state.achievements.some(id => !srv.achievements.includes(id));
+
   const localAhead =
     state.lifetime > srv.lifetime ||
     state.prestige > srv.prestige ||
     (state.prestige === srv.prestige && state.total > srv.total) ||
     (state.prestige === srv.prestige && state.aura > srv.aura) ||
-    state.tokens > serverTokens;
+    localHasHigherUps ||
+    localHasMoreOwned ||
+    localHasMoreAch ||
+    (state.tokens > serverTokens && Date.now() - lastLocalEquipTime < 3000);
 
   if (localAhead) {
-    void sync?.syncProfile(
-      state.lifetime,
-      state.prestige,
-      state.total,
-      state.aura,
-      state.equipped as Record<string, string>
-    );
+    void pushFullProfileSync();
   }
 
   if (Object.keys(state.equipped).length > 0 && Object.keys(srv.equipped || {}).length === 0) {
@@ -364,7 +407,9 @@ function onServer(r: ServerState, _pending: string) {
   if (stateChanged) {
     level = levelOf(state.total);
     render();
+    applyCosmetics();
     updateMyRankHeader();
+    if (menu.open) renderMenu();
   }
 }
 
@@ -467,6 +512,7 @@ function act(code: string, arg = "") {
     saveLocalExt(localExt);
   }
   if (code === EV.buyCosmetic || code === EV.equip || code === EV.unequip) {
+    lastLocalEquipTime = Date.now();
     if (code === EV.buyCosmetic) {
       const bought = COSMETICS.find(x => x.code === arg);
       if (bought && state.owned.includes(bought.id) && !localCos.localBought.includes(bought.id)) {
@@ -482,7 +528,7 @@ function act(code: string, arg = "") {
     saveLocalCos(localCos);
     sync?.broadcastCosmetics(myName, state.equipped as Record<string, string>, state.lifetime, state.prestige);
     void sync?.setEquipped(state.equipped as Record<string, string>);
-    void sync?.syncProfile(state.lifetime, state.prestige, state.total, state.aura, state.equipped as Record<string, string>);
+    void pushFullProfileSync();
   }
   save(state);
   sync?.push(code + arg);
@@ -771,7 +817,7 @@ $("prestige").addEventListener("click", () => {
   if (sync) {
     sync.broadcastCosmetics(myName, state.equipped as Record<string, string>, state.lifetime, state.prestige);
     void sync.setEquipped(state.equipped as Record<string, string>);
-    void sync.syncProfile(state.lifetime, state.prestige, state.total, state.aura, state.equipped as Record<string, string>);
+    void pushFullProfileSync();
     void sync.flush().then(() => {
       void loadRanking();
       updateMyRankHeader();
@@ -1234,7 +1280,7 @@ async function completeGoogleSignIn(info: { sub: string; email: string; name?: s
   // 3. Sincroniza o perfil atualizado na nuvem
   if (sync) {
     void sync.setEquipped(state.equipped as Record<string, string>);
-    void sync.syncProfile(state.lifetime, state.prestige, state.total, state.aura, state.equipped as Record<string, string>);
+    void pushFullProfileSync();
     void sync.flush();
   }
 
@@ -1410,13 +1456,7 @@ $("btn-sync-now")?.addEventListener("click", async () => {
         state = mergeStates(state, toState(srv));
         save(state);
       }
-      await sync.syncProfile(
-        state.lifetime,
-        state.prestige,
-        state.total,
-        state.aura,
-        state.equipped as Record<string, string>
-      );
+      await pushFullProfileSync();
       if (Object.keys(state.equipped).length > 0) {
         await sync.setEquipped(state.equipped as Record<string, string>);
       }
@@ -1424,6 +1464,7 @@ $("btn-sync-now")?.addEventListener("click", async () => {
       await loadRanking();
       level = levelOf(state.total);
       render();
+      applyCosmetics();
       updateMyRankHeader();
       toast("✅ Progresso sincronizado com sucesso!");
       if (msg) msg.textContent = "✅ Progresso 100% sincronizado com a nuvem!";
@@ -1502,7 +1543,7 @@ $("btn-paste-token")?.addEventListener("click", async () => {
       }
     } catch { /* ignore */ }
     void sync.setEquipped(state.equipped as Record<string, string>);
-    void sync.syncProfile(state.lifetime, state.prestige, state.total, state.aura, state.equipped as Record<string, string>);
+    void pushFullProfileSync();
     void sync.flush();
   }
   sfx.welcome();
@@ -1511,6 +1552,7 @@ $("btn-paste-token")?.addEventListener("click", async () => {
   if (msg) msg.textContent = "✅ Conta conectada e sincronizada!";
   renderedMenu = "";
   renderAccount();
+  applyCosmetics();
   render();
   void loadRanking();
 });
@@ -1605,7 +1647,7 @@ async function handleNicknameChange(rawName: string, msgEl: HTMLElement | null) 
       await sync.setName(enteredName);
       sync.broadcastCosmetics(myName, state.equipped as Record<string, string>, state.lifetime, state.prestige);
       void sync.setEquipped(state.equipped as Record<string, string>);
-      void sync.syncProfile(state.lifetime, state.prestige, state.total, state.aura, state.equipped as Record<string, string>);
+      void pushFullProfileSync();
       await sync.flush();
       void loadRanking();
     }

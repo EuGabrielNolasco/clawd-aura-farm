@@ -129,6 +129,44 @@ describe("storage e sincronização de contas", () => {
     expect(merged.upgrades.aux).toBe(40); // preserva a loja no máximo
   });
 
+  it("mescla estados sincronizando upgrades, enfeites equipados e itens comprados (PC ⇄ Celular)", () => {
+    // Celular antes da sincronização
+    const mobile = newState();
+    mobile.aura = 243_179_376_958;
+    mobile.lifetime = 243_179_376_958;
+    mobile.prestige = 3;
+    mobile.tokens = 505;
+    mobile.upgrades.click = 10;
+    mobile.upgrades.aux = 5;
+    mobile.equipped = { color: "color_dourado", outfit: "outfit_terno" };
+    mobile.owned = ["color_dourado", "outfit_terno"];
+
+    // PC com upgrades maximizados, gastou 110 fichas em itens novos e equipou cyan robot
+    const pc = newState();
+    pc.aura = 243_393_092_692;
+    pc.lifetime = 243_393_092_692;
+    pc.prestige = 3;
+    pc.tokens = 395;
+    pc.upgrades.click = 30;
+    pc.upgrades.aux = 40;
+    pc.upgrades.dc = 25;
+    pc.equipped = { color: "color_neon", hat: "hat_megabrain", bg: "bg_favela" };
+    pc.owned = ["color_neon", "hat_megabrain", "bg_favela"];
+
+    const synced = mergeStates(mobile, pc);
+    expect(synced.aura).toBe(243_393_092_692);
+    expect(synced.upgrades.click).toBe(30);
+    expect(synced.upgrades.aux).toBe(40);
+    expect(synced.upgrades.dc).toBe(25);
+    expect(synced.equipped.color).toBe("color_neon");
+    expect(synced.equipped.hat).toBe("hat_megabrain");
+    expect(synced.equipped.bg).toBe("bg_favela");
+    expect(synced.owned).toContain("color_dourado");
+    expect(synced.owned).toContain("color_neon");
+    expect(synced.owned).toContain("hat_megabrain");
+    expect(synced.owned).toContain("bg_favela");
+  });
+
   it("deriva par (id, secret) determinístico a partir do Google sub", async () => {
     const p1 = await derivePlayerFromGoogle("104829104810294819204");
     const p2 = await derivePlayerFromGoogle("104829104810294819204");

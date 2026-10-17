@@ -533,7 +533,8 @@ begin
   );
 end $$;
 
-/** Atualiza o perfil e progresso vitalício legítimo do jogador se localmente for maior que o salvo no servidor. */
+/** Atualiza o perfil completo do jogador (aura, prestígio, upgrades, fichas, conquistas e enfeites) para sincronizar entre aparelhos. */
+drop function if exists public.aura_sync_profile(uuid, text, double precision, int, double precision, double precision, jsonb);
 create or replace function public.aura_sync_profile(
   p_id uuid,
   p_secret text,
@@ -541,13 +542,20 @@ create or replace function public.aura_sync_profile(
   p_prestige int default 0,
   p_total double precision default 0,
   p_aura double precision default 0,
-  p_equipped jsonb default null
+  p_equipped jsonb default null,
+  p_ups int[] default null,
+  p_tokens int default null,
+  p_achievements text[] default null,
+  p_owned text[] default null
 )
 returns jsonb
 language plpgsql security definer set search_path = '' as $$
 declare
   v_hash text;
   v_p public.aura_players;
+  v_ups int[];
+  v_ach text[];
+  v_owned text[];
 begin
   v_hash := encode(sha256(convert_to(p_secret, 'UTF8')), 'hex');
   select * into v_p from public.aura_players where id = p_id and secret_hash = v_hash;
@@ -555,11 +563,43 @@ begin
     raise exception 'jogador não encontrado ou segredo inválido' using errcode = '28000';
   end if;
 
+  -- Mescla upgrades garantindo o maior nível alcançado em cada item
+  v_ups := coalesce(v_p.ups, '{0,0,0,0,0,0}');
+  if array_length(v_ups, 1) is null or array_length(v_ups, 1) < 6 then
+    v_ups := '{0,0,0,0,0,0}';
+  end if;
+  if p_ups is not null and array_length(p_ups, 1) >= 6 then
+    v_ups := array[
+      greatest(coalesce(v_ups[1], 0), coalesce(p_ups[1], 0)),
+      greatest(coalesce(v_ups[2], 0), coalesce(p_ups[2], 0)),
+      greatest(coalesce(v_ups[3], 0), coalesce(p_ups[3], 0)),
+      greatest(coalesce(v_ups[4], 0), coalesce(p_ups[4], 0)),
+      greatest(coalesce(v_ups[5], 0), coalesce(p_ups[5], 0)),
+      greatest(coalesce(v_ups[6], 0), coalesce(p_ups[6], 0))
+    ];
+  end if;
+
+  -- Mescla conquistas sem repetição
+  v_ach := coalesce(v_p.achievements, '{}');
+  if p_achievements is not null and array_length(p_achievements, 1) > 0 then
+    select coalesce(array_agg(distinct x), '{}') into v_ach from unnest(v_ach || p_achievements) as t(x);
+  end if;
+
+  -- Mescla itens possuídos sem repetição
+  v_owned := coalesce(v_p.owned, '{}');
+  if p_owned is not null and array_length(p_owned, 1) > 0 then
+    select coalesce(array_agg(distinct x), '{}') into v_owned from unnest(v_owned || p_owned) as t(x);
+  end if;
+
   update public.aura_players
      set lifetime = greatest(lifetime, coalesce(p_lifetime, 0)),
          prestige = greatest(prestige, coalesce(p_prestige, 0)),
          total = greatest(total, coalesce(p_total, 0)),
          aura = greatest(aura, coalesce(p_aura, 0)),
+         ups = v_ups,
+         tokens = case when p_tokens is not null then p_tokens else tokens end,
+         achievements = v_ach,
+         owned = v_owned,
          equipped = case when p_equipped is not null and p_equipped <> '{}'::jsonb then p_equipped else equipped end,
          last_seen = now()
    where id = p_id
@@ -572,6 +612,10 @@ begin
     'prestige', v_p.prestige,
     'total', v_p.total,
     'aura', v_p.aura,
+    'tokens', v_p.tokens,
+    'ups', to_jsonb(v_p.ups),
+    'achievements', to_jsonb(v_p.achievements),
+    'owned', to_jsonb(v_p.owned),
     'equipped', v_p.equipped
   );
 end $$;
@@ -612,12 +656,12 @@ revoke all on function public.aura_set_name(uuid, text, text) from public, anon,
 revoke all on function public.aura_top(int) from public, anon, authenticated;
 revoke all on function public.aura_around(uuid, text) from public, anon, authenticated;
 revoke all on function public.aura_google_auth(uuid, text, text, text, text) from public, anon, authenticated;
-revoke all on function public.aura_sync_profile(uuid, text, double precision, int, double precision, double precision, jsonb) from public, anon, authenticated;
+revoke all on function public.aura_sync_profile(uuid, text, double precision, int, double precision, double precision, jsonb, int[], int, text[], text[]) from public, anon, authenticated;
 revoke all on function public.aura_set_equipped(uuid, text, jsonb) from public, anon, authenticated;
 grant execute on function public.aura_sync(uuid, text, text) to anon, authenticated;
 grant execute on function public.aura_set_name(uuid, text, text) to anon, authenticated;
 grant execute on function public.aura_top(int) to anon, authenticated;
 grant execute on function public.aura_around(uuid, text) to anon, authenticated;
 grant execute on function public.aura_google_auth(uuid, text, text, text, text) to anon, authenticated;
-grant execute on function public.aura_sync_profile(uuid, text, double precision, int, double precision, double precision, jsonb) to anon, authenticated;
+grant execute on function public.aura_sync_profile(uuid, text, double precision, int, double precision, double precision, jsonb, int[], int, text[], text[]) to anon, authenticated;
 grant execute on function public.aura_set_equipped(uuid, text, jsonb) to anon, authenticated;
