@@ -43,6 +43,7 @@ jobs:
       # a chave anon é pública por design; configure em Settings → Secrets and variables → Actions → Variables
       VITE_SUPABASE_URL: ${{ vars.SUPABASE_URL }}
       VITE_SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY }}
+      VITE_GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID || vars.GOOGLE_CLIENT_ID }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

@@ -11,10 +11,10 @@ import { clawdSvg } from "./mini";
 import { createSync, onlineEnabled, toState, type RankRow, type ServerState } from "./online";
 import { sfx, setMuted } from "./sound";
 import {
-  exportSaveJson, generateConfirmationCode, importSaveJson,
-  load, loadExternalAccountVault, loadLinkedAccount, loadMuted, normalizeIdentifier,
-  player, PROVIDER_LABELS, sanitize, save, saveExternalAccountVault, saveLinkedAccount,
-  saveMuted, savePlayer, type AuthProvider, type Player,
+  clearGoogleAccount, exportSaveJson, getGoogleClientId, importSaveJson,
+  load, loadGoogleAccount, loadGoogleAccountVault, loadMuted, parseGoogleJwt,
+  player, sanitize, save, saveGoogleAccount, saveGoogleAccountVault,
+  saveMuted, savePlayer, type Player,
 } from "./storage";
 import { addSpin, loadSpins, renderWheelSvg, saveSpins, spinWheel } from "./wheel";
 
@@ -511,8 +511,8 @@ function localTick() {
   const reward = daily(state, todayBR());
   if (reward) dailyReward(reward, state.streak);
   for (const a of checkAchievements(state, levelOf(state.total), allMaxed(state))) achievementUnlocked(a.id);
-  const linked = loadLinkedAccount();
-  if (linked) saveExternalAccountVault(linked.provider, linked.identifier, activePlayer, state);
+  const gAcc = loadGoogleAccount();
+  if (gAcc) saveGoogleAccountVault(gAcc.email, activePlayer, state);
 }
 
 // aura passiva local, para o contador andar suave; no online o servidor corrige a cada sincronização
@@ -603,20 +603,24 @@ function renderMenu() {
 
 function renderAccount() {
   $("acc-avatar").innerHTML = clawdSvg(state.equipped);
-  $("acc-name").textContent = myName || "Jogador Anônimo";
+  const gAcc = loadGoogleAccount();
+  $("acc-name").textContent = myName || gAcc?.name || "Jogador Anônimo";
   $("acc-status").textContent = sync ? "🟢 Sincronizado na Nuvem" : "🟡 Modo Local (Offline)";
   $("acc-id-short").textContent = "Conta Principal Preservada";
   $("acc-rank-label").textContent = lastRank ? `#${lastRank} no ranking` : "Sem apelido no ranking";
 
-  const linked = loadLinkedAccount();
   const badge = $("acc-linked-badge");
+  const signoutBtn = $("google-signout-btn");
   if (badge) {
-    if (linked) {
+    if (gAcc) {
       badge.hidden = false;
-      badge.textContent = `✅ Confirmado com ${PROVIDER_LABELS[linked.provider]}: ${linked.identifier}`;
+      badge.textContent = `✅ Conectado via Google OAuth 2.0: ${gAcc.email}`;
     } else {
       badge.hidden = true;
     }
+  }
+  if (signoutBtn) {
+    signoutBtn.hidden = !gAcc;
   }
 }
 
@@ -825,148 +829,119 @@ for (const b of document.querySelectorAll<HTMLElement>(".subtabs [data-list]")) 
   b.addEventListener("click", () => { list = b.dataset.list as typeof list; void loadRanking(); });
 }
 
-// ===== eventos da conta & sincronização externa com código de 6 dígitos =====
-let selectedProvider: AuthProvider = "google";
-let pendingOtp: { provider: AuthProvider; identifier: string; norm: string; code: string } | null = null;
-
-const PROVIDER_UI: Record<AuthProvider, { label: string; placeholder: string; type: string }> = {
-  google: { label: "E-mail da conta Google (Gmail)", placeholder: "seuemail@gmail.com", type: "email" },
-  facebook: { label: "E-mail ou usuário do Facebook", placeholder: "seuemail@facebook.com", type: "text" },
-  apple: { label: "E-mail do seu Apple ID (iCloud)", placeholder: "seuemail@icloud.com", type: "email" },
-  phone: { label: "Número de Celular com DDD (recebe código)", placeholder: "(11) 99999-9999", type: "tel" },
-};
-
-function selectSocialProvider(p: AuthProvider) {
-  selectedProvider = p;
-  pendingOtp = null;
-  for (const btn of document.querySelectorAll<HTMLElement>(".social-btn[data-provider]")) {
-    btn.classList.toggle("active", btn.dataset.provider === p);
-  }
-  const cfg = PROVIDER_UI[p];
-  const lbl = $("social-id-label");
-  const inp = $<HTMLInputElement>("social-id-input");
-  const otpBox = $("otp-step-box");
-  const msg = $("social-sync-msg");
-  if (lbl) lbl.textContent = cfg.label;
-  if (inp) {
-    inp.placeholder = cfg.placeholder;
-    inp.type = cfg.type;
-  }
-  if (otpBox) otpBox.hidden = true;
-  if (msg) msg.textContent = "";
+// ===== Autenticação Exclusiva Google OAuth 2.0 (Google Identity Services) =====
+interface GoogleWindow {
+  google?: {
+    accounts?: {
+      id?: {
+        initialize: (cfg: { client_id: string; callback: (res: { credential?: string }) => void }) => void;
+        prompt: () => void;
+      };
+      oauth2?: {
+        initTokenClient: (cfg: {
+          client_id: string;
+          scope: string;
+          prompt?: string;
+          callback: (resp: { access_token?: string; error?: string }) => void;
+        }) => { requestAccessToken: () => void };
+      };
+    };
+  };
 }
 
-for (const btn of document.querySelectorAll<HTMLElement>(".social-btn[data-provider]")) {
-  btn.addEventListener("click", () => selectSocialProvider(btn.dataset.provider as AuthProvider));
-}
+function completeGoogleSignIn(info: { sub: string; email: string; name?: string; picture?: string }) {
+  const normEmail = info.email.trim().toLowerCase();
 
-const initialLinked = loadLinkedAccount();
-if (initialLinked) {
-  selectSocialProvider(initialLinked.provider);
-  const inp = $<HTMLInputElement>("social-id-input");
-  if (inp) inp.value = initialLinked.identifier;
-}
-
-$("send-code-btn")?.addEventListener("click", () => {
-  const idInput = $<HTMLInputElement>("social-id-input");
-  const msg = $("social-sync-msg");
-  const otpBox = $("otp-step-box");
-  const banner = $("otp-delivery-banner");
-  const waBtn = $("whatsapp-code-btn");
-  const codeInput = $<HTMLInputElement>("social-code-input");
-
-  const rawId = idInput.value.trim();
-  const norm = normalizeIdentifier(selectedProvider, rawId);
-  if (!norm) {
-    sfx.denied();
-    msg.textContent = selectedProvider === "phone"
-      ? "Informe um número de celular válido com DDD (ex: 11 99999-9999)."
-      : `Informe um identificador válido de ${PROVIDER_LABELS[selectedProvider]}.`;
-    return;
-  }
-
-  const code = generateConfirmationCode();
-  pendingOtp = { provider: selectedProvider, identifier: rawId, norm, code };
-
-  if (otpBox) otpBox.hidden = false;
-  if (waBtn) waBtn.hidden = selectedProvider !== "phone";
-  if (banner) {
-    banner.innerHTML = selectedProvider === "phone"
-      ? `📲 Código SMS/WhatsApp enviado para <span>${rawId}</span>: <b>${code}</b>`
-      : `📧 Código de confirmação (${PROVIDER_LABELS[selectedProvider]}) enviado para <span>${rawId}</span>: <b>${code}</b>`;
-  }
-  if (codeInput) {
-    codeInput.value = "";
-    codeInput.focus();
-  }
-  msg.textContent = "Digite o código de 6 dígitos acima e clique em Confirmar Código.";
-  sfx.copy();
-  toast(`🔐 Seu código de confirmação (${PROVIDER_LABELS[selectedProvider]}): ${code}`);
-});
-
-$("whatsapp-code-btn")?.addEventListener("click", () => {
-  if (!pendingOtp || pendingOtp.provider !== "phone") return;
-  const text = encodeURIComponent(`🔐 Clawd Aura Farm — Código de confirmação da sua conta: *${pendingOtp.code}*`);
-  window.open(`https://wa.me/${pendingOtp.norm}?text=${text}`, "_blank", "noopener");
-});
-
-$<HTMLFormElement>("social-sync-form")?.addEventListener("submit", e => {
-  e.preventDefault();
-  const msg = $("social-sync-msg");
-  const codeInput = $<HTMLInputElement>("social-code-input");
-  if (!pendingOtp) {
-    msg.textContent = "Clique primeiro em '📩 Enviar Código' para receber seu código de 6 dígitos.";
-    return;
-  }
-  const typed = codeInput.value.trim();
-  if (typed !== pendingOtp.code) {
-    sfx.denied();
-    msg.textContent = "❌ Código incorreto! Confira os 6 dígitos enviados e tente novamente.";
-    return;
-  }
-
-  const { provider, identifier, norm } = pendingOtp;
-  const label = PROVIDER_LABELS[provider];
-
-  // Se o jogador estiver em um navegador zerado (sem conta existente), verifica se já existe conta salva para esse login
+  // Se o navegador for novo (sem conta), restaura o progresso salvo para esse Google
   if (state.lifetime === 0 && !gordurinhaRestored) {
-    if (norm === "diogogamer1704@gmail.com") {
-      restoreGordurinhaAccount(true);
-    } else {
-      const vault = loadExternalAccountVault(provider, identifier);
-      if (vault) {
-        activePlayer = vault.player;
-        state = vault.state;
-        savePlayer(activePlayer);
-        save(state);
-        sync?.setPlayer(activePlayer);
-      }
+    const vault = loadGoogleAccountVault(normEmail);
+    if (vault) {
+      activePlayer = vault.player;
+      state = vault.state;
+      savePlayer(activePlayer);
+      save(state);
+      sync?.setPlayer(activePlayer);
     }
   }
 
-  // NUNCA cria chave nova nem apaga a conta atual: apenas vincula e salva a conta existente!
-  saveExternalAccountVault(provider, identifier, activePlayer, state);
-  saveLinkedAccount({
-    provider,
-    identifier,
-    verified: true,
+  // NUNCA cria chave nova nem reseta a conta atual: apenas vincula ao Google OAuth 2.0
+  saveGoogleAccountVault(normEmail, activePlayer, state);
+  saveGoogleAccount({
+    sub: info.sub,
+    email: normEmail,
+    name: info.name,
+    picture: info.picture,
     linkedAt: Date.now(),
     playerId: activePlayer.id,
   });
 
-  pendingOtp = null;
-  $("otp-step-box").hidden = true;
-  codeInput.value = "";
-  msg.textContent = `✅ Conta confirmada e sincronizada com ${label} (${identifier})! Sua conta principal está protegida.`;
+  const msg = $("google-oauth-msg");
+  if (msg) msg.textContent = `✅ Conectado via Google (${normEmail})! Sua conta está sincronizada e protegida.`;
   sfx.welcome();
-  toast(`🎉 Conta confirmada com ${label}! Progresso salvo sem alterar sua chave.`);
+  toast(`🎉 Conectado com Google (${normEmail})!`);
 
   if (menu.classList.contains("auth-required")) {
     menu.classList.remove("auth-required");
     menu.close();
   }
+  renderedMenu = "";
   renderAccount();
   render();
+}
+
+$("google-oauth-btn")?.addEventListener("click", () => {
+  const clientId = getGoogleClientId();
+  const msg = $("google-oauth-msg");
+  const gWin = window as unknown as GoogleWindow;
+
+  if (gWin.google?.accounts?.oauth2) {
+    const tokenClient = gWin.google.accounts.oauth2.initTokenClient({
+      client_id: clientId,
+      scope: "openid email profile",
+      prompt: "select_account",
+      callback: async resp => {
+        if (!resp.access_token) return;
+        try {
+          const r = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+            headers: { Authorization: `Bearer ${resp.access_token}` },
+          });
+          if (!r.ok) throw new Error("Falha ao obter perfil do Google.");
+          const data = await r.json();
+          if (data && data.sub && data.email) {
+            completeGoogleSignIn({
+              sub: String(data.sub),
+              email: String(data.email),
+              name: data.name ? String(data.name) : undefined,
+              picture: data.picture ? String(data.picture) : undefined,
+            });
+          }
+        } catch (err) {
+          if (msg) msg.textContent = "Erro ao conectar com Google: " + (err as Error).message;
+        }
+      },
+    });
+    tokenClient.requestAccessToken();
+  } else if (gWin.google?.accounts?.id) {
+    gWin.google.accounts.id.initialize({
+      client_id: clientId,
+      callback: res => {
+        if (!res.credential) return;
+        const parsed = parseGoogleJwt(res.credential);
+        if (parsed) completeGoogleSignIn(parsed);
+      },
+    });
+    gWin.google.accounts.id.prompt();
+  } else {
+    if (msg) msg.textContent = "Carregando login do Google… Tente novamente em 1 segundo.";
+  }
+});
+
+$("google-signout-btn")?.addEventListener("click", () => {
+  clearGoogleAccount();
+  const msg = $("google-oauth-msg");
+  if (msg) msg.textContent = "Sessão do Google desconectada (seu progresso local foi mantido).";
+  renderedMenu = "";
+  renderAccount();
 });
 
 $("restore-gordurinha-btn")?.addEventListener("click", () => {
@@ -1070,8 +1045,7 @@ if (sync) {
   localTick();
 }
 
-// Quando alguém entra no site novo (sem conta confirmada), exige entrar com Google, Facebook, Apple ID ou Número + código
-if (!loadLinkedAccount() && state.lifetime === 0 && !gordurinhaRestored) {
+if (!loadGoogleAccount() && state.lifetime === 0 && !gordurinhaRestored && getGoogleClientId()) {
   menu.classList.add("auth-required");
   openMenu("account");
 }
