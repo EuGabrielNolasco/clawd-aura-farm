@@ -935,8 +935,25 @@ button:focus-visible { outline: 3px solid var(--ink); outline-offset: 4px; }
 }
 
 /* ===== Autenticação Google OAuth 2.0 ===== */
-.menu.auth-required .shop-head {
-  display: none;
+.menu.auth-required .shop-head .tabs {
+  visibility: hidden;
+}
+
+.btn-text-guest {
+  margin-top: .4rem;
+  background: transparent;
+  border: none;
+  color: #c4b5fd;
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: .88rem;
+  font-weight: 700;
+  text-decoration: underline;
+  padding: .4rem .8rem;
+  transition: color .15s;
+}
+.btn-text-guest:hover {
+  color: #ffffff;
 }
 
 .acc-linked-badge {

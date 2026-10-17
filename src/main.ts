@@ -246,6 +246,9 @@ function onServer(r: ServerState, _pending: string) {
         }
       } catch { /* ignore */ }
     }
+    if (state.lifetime > srv.lifetime || state.prestige > srv.prestige) {
+      void sync?.syncProfile(state.lifetime, state.prestige, state.total, state.aura);
+    }
     state.lifetime = Math.max(state.lifetime, srv.lifetime);
     state.prestige = Math.max(state.prestige, srv.prestige, localExt.prestige || 0);
     state.streak = Math.max(state.streak, srv.streak);
@@ -689,6 +692,7 @@ $("prestige").addEventListener("click", () => {
   // 6. Atualiza imediatamente o ranking
   if (sync) {
     sync.broadcastCosmetics(myName, state.equipped as Record<string, string>, state.lifetime, state.prestige);
+    void sync.syncProfile(state.lifetime, state.prestige, state.total, state.aura);
     void sync.flush().then(() => {
       void loadRanking();
       updateMyRankHeader();
@@ -755,16 +759,16 @@ for (const b of document.querySelectorAll<HTMLElement>(".menu-open, .tabs [data-
   b.addEventListener("click", () => openMenu(b.dataset.tab!));
 }
 $("menu-close").addEventListener("click", () => {
-  if (menu.classList.contains("auth-required")) return;
+  menu.classList.remove("auth-required");
   stopRankingTimer();
   menu.close();
 });
 menu.addEventListener("close", () => {
   stopRankingTimer();
 });
-menu.addEventListener("cancel", e => {
-  if (menu.classList.contains("auth-required")) e.preventDefault();
-  else stopRankingTimer();
+menu.addEventListener("cancel", () => {
+  menu.classList.remove("auth-required");
+  stopRankingTimer();
 });
 
 let renderedMenu = "";
@@ -1062,7 +1066,8 @@ async function loadRanking(silent = false) {
     ol.replaceChildren(Object.assign(document.createElement("li"), { textContent: "Carregando…" }));
   }
   try {
-    const rows = list === "top" ? await sync.top() : await sync.around();
+    const myProg = { lifetime: state.lifetime, prestige: state.prestige, equipped: state.equipped as Record<string, string> };
+    const rows = list === "top" ? await sync.top(myProg, myName) : await sync.around(myProg, myName);
     updateMyRankHeader();
     if (!rows.length) {
       ol.replaceChildren(Object.assign(document.createElement("li"), {
@@ -1256,6 +1261,13 @@ $("google-oauth-btn")?.addEventListener("click", () => {
   if (!popup) {
     window.location.href = authUrl;
   }
+});
+
+$("google-skip-btn")?.addEventListener("click", () => {
+  menu.classList.remove("auth-required");
+  stopRankingTimer();
+  menu.close();
+  toast("🎮 Jogando como convidado! Conecte seu Google quando quiser na aba Conta.");
 });
 
 $("google-signout-btn")?.addEventListener("click", () => {

@@ -8,15 +8,15 @@ function csp(supabaseUrl: string | undefined): Plugin {
   const supaOrigin = supabaseUrl ? new URL(supabaseUrl).origin : "";
   const supaWs = supabaseUrl ? `wss://${new URL(supabaseUrl).host}` : "";
   const connect = supabaseUrl
-    ? `'self' ${supaOrigin} ${supaWs} https://accounts.google.com https://www.googleapis.com`
-    : "'self' https://accounts.google.com https://www.googleapis.com";
+    ? `'self' ${supaOrigin} ${supaWs} https://accounts.google.com https://apis.google.com https://www.googleapis.com`
+    : "'self' https://accounts.google.com https://apis.google.com https://www.googleapis.com";
   const policy = [
     "default-src 'self'",
-    "script-src 'self' https://accounts.google.com",
+    "script-src 'self' 'unsafe-inline' https://accounts.google.com https://apis.google.com https://www.gstatic.com",
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com",
-    "font-src https://fonts.gstatic.com",
-    "frame-src 'self' https://accounts.google.com",
-    "img-src 'self' data: https://*.googleusercontent.com",
+    "font-src 'self' https://fonts.gstatic.com data:",
+    "frame-src 'self' https://accounts.google.com https://apis.google.com https://*.google.com",
+    "img-src 'self' data: https://*.googleusercontent.com https://*.gstatic.com",
     `connect-src ${connect}`,
     "object-src 'none'",
     "base-uri 'self'",

@@ -76,7 +76,8 @@ export interface LivePlayerMeta {
 export function deduplicateRankRows(
   rows: RankRow[],
   liveMap?: Map<string, LivePlayerMeta>,
-  currentName?: string | null
+  currentName?: string | null,
+  localProgress?: { lifetime: number; prestige: number; equipped?: Record<string, string> }
 ): RankRow[] {
   const byKey = new Map<string, RankRow>();
 
@@ -86,10 +87,16 @@ export function deduplicateRankRows(
     if (!cleanName) continue;
     const key = cleanName.toLowerCase();
     const live = liveMap?.get(key);
-    const rowLifetime = Math.max(r.lifetime, live?.lifetime ?? 0);
-    const rowPrestige = Math.max(r.prestige ?? 0, live?.prestige ?? 0);
-    const rowEquipped = { ...(r.equipped ?? {}), ...(live?.equipped ?? {}) };
     const isMe = Boolean(r.me || (currentName && key === currentName.trim().toLowerCase()));
+    const myLifetime = isMe && localProgress ? Math.max(localProgress.lifetime, 0) : 0;
+    const myPrestige = isMe && localProgress ? Math.max(localProgress.prestige, 0) : 0;
+    const rowLifetime = Math.max(r.lifetime, live?.lifetime ?? 0, myLifetime);
+    const rowPrestige = Math.max(r.prestige ?? 0, live?.prestige ?? 0, myPrestige);
+    const rowEquipped = {
+      ...(r.equipped ?? {}),
+      ...(live?.equipped ?? {}),
+      ...(isMe && localProgress?.equipped ? localProgress.equipped : {}),
+    };
 
     const existing = byKey.get(key);
     if (!existing) {
@@ -119,6 +126,26 @@ export function deduplicateRankRows(
         existing.me = existing.me || isMe;
         existing.equipped = { ...rowEquipped, ...existing.equipped };
       }
+    }
+  }
+
+  // Se o jogador local tem apelido e progresso, mas não veio na lista do servidor, inclui-o
+  if (currentName && localProgress && localProgress.lifetime > 0) {
+    const key = currentName.trim().toLowerCase();
+    const existing = byKey.get(key);
+    if (!existing) {
+      byKey.set(key, {
+        rank: 999,
+        name: currentName.trim(),
+        lifetime: localProgress.lifetime,
+        prestige: localProgress.prestige,
+        equipped: localProgress.equipped ?? {},
+        me: true,
+      });
+    } else {
+      existing.me = true;
+      existing.lifetime = Math.max(existing.lifetime, localProgress.lifetime);
+      existing.prestige = Math.max(existing.prestige, localProgress.prestige);
     }
   }
 
@@ -238,7 +265,11 @@ export function createSync(
     }
   }, 25000);
 
-  const mergeRankRows = (rows: RankRow[]) => deduplicateRankRows(rows, livePlayerByName, currentName);
+  const mergeRankRows = (
+    rows: RankRow[],
+    localProgress?: { lifetime: number; prestige: number; equipped?: Record<string, string> },
+    nameOverride?: string | null
+  ) => deduplicateRankRows(rows, livePlayerByName, nameOverride || currentName, localProgress);
 
   async function flush() {
     if (inflight || paused) return;
@@ -281,8 +312,35 @@ export function createSync(
     },
     broadcastCosmetics: (name: string | null, equipped: Record<string, string>, lifetime = 0, prestige = 0) =>
       sendCosmeticsBroadcast(name, equipped, lifetime, prestige),
-    top: async () => mergeRankRows(await rpc<RankRow[]>("aura_top", { p_limit: 50 })),
-    around: async () => mergeRankRows(await rpc<RankRow[]>("aura_around", { p_id: p.id, p_secret: p.secret })),
+    top: async (
+      localProgress?: { lifetime: number; prestige: number; equipped?: Record<string, string> },
+      nameOverride?: string | null
+    ) => mergeRankRows(await rpc<RankRow[]>("aura_top", { p_limit: 50 }), localProgress, nameOverride),
+    around: async (
+      localProgress?: { lifetime: number; prestige: number; equipped?: Record<string, string> },
+      nameOverride?: string | null
+    ) => mergeRankRows(await rpc<RankRow[]>("aura_around", { p_id: p.id, p_secret: p.secret }), localProgress, nameOverride),
+    syncProfile: async (lifetime: number, prestige: number, total: number, aura: number) => {
+      try {
+        return await rpc<{
+          id: string;
+          name: string | null;
+          lifetime: number;
+          prestige: number;
+          total: number;
+          aura: number;
+        }>("aura_sync_profile", {
+          p_id: p.id,
+          p_secret: p.secret,
+          p_lifetime: lifetime,
+          p_prestige: prestige,
+          p_total: total,
+          p_aura: aura,
+        });
+      } catch {
+        return null;
+      }
+    },
     googleAuth: async (curP: Player, email: string, sub: string, name?: string | null) =>
       rpc<{
         action: "linked" | "switched";

@@ -58,4 +58,45 @@ describe("deduplicateRankRows (ranking online)", () => {
     expect(result.map(r => r.name)).toEqual(["Ouro", "Prata", "Bronze"]);
     expect(result.map(r => r.rank)).toEqual([1, 2, 3]);
   });
+
+  it("prioriza localProgress colocando o jogador em #1 se o progresso local for maior", () => {
+    const rows: RankRow[] = [
+      { rank: 1, name: "Diogo Nolasco", lifetime: 4_650_000_000_000, prestige: 3, equipped: {} },
+      { rank: 2, name: "Gabriel Nolasco", lifetime: 819_000_000_000, prestige: 2, equipped: {} },
+    ];
+
+    // Jogador local possui 22.4 trilhões e 4 estrelas
+    const result = deduplicateRankRows(rows, undefined, "Gabriel Nolasco", {
+      lifetime: 22_400_000_000_000,
+      prestige: 4,
+      equipped: { hat: "hat_coroa" },
+    });
+
+    expect(result.length).toBe(2);
+    expect(result[0].name).toBe("Gabriel Nolasco");
+    expect(result[0].rank).toBe(1);
+    expect(result[0].lifetime).toBe(22_400_000_000_000);
+    expect(result[0].prestige).toBe(4);
+    expect(result[0].me).toBe(true);
+
+    expect(result[1].name).toBe("Diogo Nolasco");
+    expect(result[1].rank).toBe(2);
+  });
+
+  it("inclui jogador local mesmo se não estiver presente na lista do servidor", () => {
+    const rows: RankRow[] = [
+      { rank: 1, name: "Outro Jogador", lifetime: 1_000_000, prestige: 0, equipped: {} },
+    ];
+
+    const result = deduplicateRankRows(rows, undefined, "Novo Jogador", {
+      lifetime: 5_000_000,
+      prestige: 1,
+    });
+
+    expect(result.length).toBe(2);
+    expect(result[0].name).toBe("Novo Jogador");
+    expect(result[0].rank).toBe(1);
+    expect(result[0].lifetime).toBe(5_000_000);
+    expect(result[0].me).toBe(true);
+  });
 });

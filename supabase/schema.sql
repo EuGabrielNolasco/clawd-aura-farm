@@ -533,6 +533,46 @@ begin
   );
 end $$;
 
+/** Atualiza o perfil e progresso vitalício legítimo do jogador se localmente for maior que o salvo no servidor. */
+create or replace function public.aura_sync_profile(
+  p_id uuid,
+  p_secret text,
+  p_lifetime double precision,
+  p_prestige int default 0,
+  p_total double precision default 0,
+  p_aura double precision default 0
+)
+returns jsonb
+language plpgsql security definer set search_path = '' as $$
+declare
+  v_hash text;
+  v_p public.aura_players;
+begin
+  v_hash := encode(sha256(convert_to(p_secret, 'UTF8')), 'hex');
+  select * into v_p from public.aura_players where id = p_id and secret_hash = v_hash;
+  if v_p.id is null then
+    raise exception 'jogador não encontrado ou segredo inválido' using errcode = '28000';
+  end if;
+
+  update public.aura_players
+     set lifetime = greatest(lifetime, coalesce(p_lifetime, 0)),
+         prestige = greatest(prestige, coalesce(p_prestige, 0)),
+         total = greatest(total, coalesce(p_total, 0)),
+         aura = greatest(aura, coalesce(p_aura, 0)),
+         last_seen = now()
+   where id = p_id
+  returning * into v_p;
+
+  return jsonb_build_object(
+    'id', v_p.id,
+    'name', v_p.name,
+    'lifetime', v_p.lifetime,
+    'prestige', v_p.prestige,
+    'total', v_p.total,
+    'aura', v_p.aura
+  );
+end $$;
+
 revoke all on function public.aura_level(double precision) from public, anon, authenticated;
 revoke all on function public.aura_threshold(int) from public, anon, authenticated;
 revoke all on function public.aura_mult(double precision, int[], int) from public, anon, authenticated;
@@ -542,8 +582,10 @@ revoke all on function public.aura_set_name(uuid, text, text) from public, anon,
 revoke all on function public.aura_top(int) from public, anon, authenticated;
 revoke all on function public.aura_around(uuid, text) from public, anon, authenticated;
 revoke all on function public.aura_google_auth(uuid, text, text, text, text) from public, anon, authenticated;
+revoke all on function public.aura_sync_profile(uuid, text, double precision, int, double precision, double precision) from public, anon, authenticated;
 grant execute on function public.aura_sync(uuid, text, text) to anon, authenticated;
 grant execute on function public.aura_set_name(uuid, text, text) to anon, authenticated;
 grant execute on function public.aura_top(int) to anon, authenticated;
 grant execute on function public.aura_around(uuid, text) to anon, authenticated;
 grant execute on function public.aura_google_auth(uuid, text, text, text, text) to anon, authenticated;
+grant execute on function public.aura_sync_profile(uuid, text, double precision, int, double precision, double precision) to anon, authenticated;
