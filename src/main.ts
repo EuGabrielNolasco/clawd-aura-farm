@@ -193,19 +193,34 @@ if (myName) sync?.broadcastCosmetics(myName, state.equipped as Record<string, st
 let nameInputPrefilled = false;
 let settingName = false;
 
+const AURA_RESTORED_KEY = "clawd-aura-farm:aura-restored-v4";
+
 function onServer(r: ServerState, _pending: string) {
   clockOffset = r.now - nowSec();
   const srv = toState(r);
 
   if (firstSync && state.lifetime === 0 && state.prestige === 0 && srv.lifetime > 0) {
-    // Dispositivo/navegador novo: restaura o estado salvo na nuvem
+    // Dispositivo/navegador novo no site: restaura o estado salvo na nuvem
     state = srv;
     state.upgrades.ia = Math.max(state.upgrades.ia, localExt.ia);
     state.upgrades.portal = Math.max(state.upgrades.portal, localExt.portal);
     state.upgrades.cosmic = Math.max(state.upgrades.cosmic, localExt.cosmic);
+    try { localStorage.setItem(AURA_RESTORED_KEY, "1"); } catch { /* ignore */ }
     if (r.offline >= 60) welcomeBack(r.offline, r.offline_gain);
   } else {
-    // Jogador já ativo localmente: preserva 100% da aura, upgrades e reset de prestígio locais!
+    if (firstSync) {
+      try {
+        const auraRestored = localStorage.getItem(AURA_RESTORED_KEY) === "1";
+        if (!auraRestored && srv.prestige >= state.prestige) {
+          state.aura = Math.max(state.aura, srv.aura);
+          state.total = Math.max(state.total, srv.total);
+          for (const u of UPGRADES) {
+            state.upgrades[u.id] = Math.max(state.upgrades[u.id], srv.upgrades[u.id]);
+          }
+          localStorage.setItem(AURA_RESTORED_KEY, "1");
+        }
+      } catch { /* ignore */ }
+    }
     state.lifetime = Math.max(state.lifetime, srv.lifetime);
     state.prestige = Math.max(state.prestige, srv.prestige, localExt.prestige || 0);
     for (const id of srv.owned) {

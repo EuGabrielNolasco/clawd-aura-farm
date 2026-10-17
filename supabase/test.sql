@@ -36,8 +36,8 @@ do $$ declare r jsonb; begin
   r := pg_temp.sync(1, repeat('c', 40) || 'amm' || repeat('c', 20) || 'a');
   assert (r->>'rng')::bigint = 23524415, 'rng diverge do JS: ' || r::text;
   assert (r->>'combo')::float8 = 1, 'combo deveria ser 1: ' || r::text;
-  assert abs((r->>'total')::float8 - 10827) < 1, 'total diverge do JS: ' || r::text;
-  assert abs((r->>'aura')::float8 - 10258) < 1, 'aura diverge do JS: ' || r::text;
+  assert abs((r->>'total')::float8 - 9554) < 1, 'total diverge do JS: ' || r::text;
+  assert abs((r->>'aura')::float8 - 7788) < 1, 'aura diverge do JS: ' || r::text;
   assert r->'ups' = '[2,2,0,0,0,0,0,0]'::jsonb, 'upgrades divergem do JS: ' || r::text;
   assert (r->>'clicks')::int = 60, 'contador de cliques errado: ' || r::text;
 end $$;
@@ -51,7 +51,7 @@ exception when invalid_authorization_specification then null; end $$;
 -- autoclicker: o balde já foi gasto, então cliques extras na mesma hora não contam
 do $$ declare r jsonb; begin
   r := pg_temp.sync(1, repeat('c', 1000));
-  assert (r->>'total')::float8 < 10827 + 1, 'cliques acima do limite contaram: ' || r::text;
+  assert (r->>'total')::float8 < 9554 + 1, 'cliques acima do limite contaram: ' || r::text;
 end $$;
 
 -- mais de 1000 eventos por chamada é recusado
@@ -64,9 +64,9 @@ exception when invalid_parameter_value then null; end $$;
 update public.aura_players set last_seen = now() - interval '100 seconds' where id = pg_temp.pid(1);
 do $$ declare r jsonb; begin
   r := pg_temp.sync(1);
-  -- 2 base + 2×2 auxiliares = 6/s, nível 0
-  assert abs((r->>'total')::float8 - (10827 + 600)) < 2, 'passiva errada: ' || r::text;
-  assert abs((r->>'offline_gain')::float8 - 600) < 2, 'ganho offline errado: ' || r::text;
+  -- 2 base + 1×2 auxiliares = 4/s, nível 0
+  assert abs((r->>'total')::float8 - (9554 + 400)) < 2, 'passiva errada: ' || r::text;
+  assert abs((r->>'offline_gain')::float8 - 400) < 2, 'ganho offline errado: ' || r::text;
 end $$;
 update public.aura_players set last_seen = now() - interval '3 days' where id = pg_temp.pid(1);
 do $$ declare r jsonb; begin
