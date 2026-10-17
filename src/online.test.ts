@@ -1,0 +1,61 @@
+import { describe, expect, it } from "vitest";
+import { deduplicateRankRows, type LivePlayerMeta, type RankRow } from "./online";
+
+describe("deduplicateRankRows (ranking online)", () => {
+  it("elimina entradas duplicadas do mesmo jogador mantendo maior progresso e prestígio", () => {
+    const rows: RankRow[] = [
+      { rank: 1, name: "Gabriel Nolasco", lifetime: 22_400_000_000_000, prestige: 4, equipped: { bg: "bg_server" } },
+      { rank: 2, name: "gabriel nolasco", lifetime: 10_000_000, prestige: 1, equipped: { hat: "hat_coroa" } },
+      { rank: 3, name: "Outro Jogador", lifetime: 50_000_000, prestige: 0, equipped: {} },
+    ];
+
+    const result = deduplicateRankRows(rows, undefined, "Gabriel Nolasco");
+
+    // Gabriel Nolasco deve aparecer apenas 1 vez no ranking
+    expect(result.length).toBe(2);
+    expect(result[0].name).toBe("Gabriel Nolasco");
+    expect(result[0].rank).toBe(1);
+    expect(result[0].lifetime).toBe(22_400_000_000_000);
+    expect(result[0].prestige).toBe(4);
+    expect(result[0].me).toBe(true);
+    expect(result[0].equipped.bg).toBe("bg_server");
+    expect(result[0].equipped.hat).toBe("hat_coroa");
+
+    // Segundo colocado
+    expect(result[1].name).toBe("Outro Jogador");
+    expect(result[1].rank).toBe(2);
+    expect(result[1].lifetime).toBe(50_000_000);
+  });
+
+  it("mescla metadados em tempo real de outros jogadores conectados", () => {
+    const rows: RankRow[] = [
+      { rank: 1, name: "Jogador Alfa", lifetime: 1_000_000, prestige: 0, equipped: {} },
+    ];
+
+    const liveMap = new Map<string, LivePlayerMeta>();
+    liveMap.set("jogador alfa", {
+      name: "Jogador Alfa",
+      lifetime: 5_000_000, // ganhou aura ao vivo
+      prestige: 1,
+      equipped: { hat: "hat_megabrain" },
+    });
+
+    const result = deduplicateRankRows(rows, liveMap);
+    expect(result.length).toBe(1);
+    expect(result[0].lifetime).toBe(5_000_000);
+    expect(result[0].prestige).toBe(1);
+    expect(result[0].equipped.hat).toBe("hat_megabrain");
+  });
+
+  it("reordena e reatribui posições limpas (#1, #2, #3...)", () => {
+    const rows: RankRow[] = [
+      { rank: 99, name: "Bronze", lifetime: 100, prestige: 0, equipped: {} },
+      { rank: 99, name: "Ouro", lifetime: 10_000, prestige: 2, equipped: {} },
+      { rank: 99, name: "Prata", lifetime: 1_000, prestige: 1, equipped: {} },
+    ];
+
+    const result = deduplicateRankRows(rows);
+    expect(result.map(r => r.name)).toEqual(["Ouro", "Prata", "Bronze"]);
+    expect(result.map(r => r.rank)).toEqual([1, 2, 3]);
+  });
+});

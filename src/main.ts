@@ -11,9 +11,9 @@ import { clawdSvg } from "./mini";
 import { createSync, onlineEnabled, toState, type RankRow, type ServerState } from "./online";
 import { sfx, setMuted } from "./sound";
 import {
-  clearGoogleAccount, exportSaveJson, getGoogleClientId, importSaveJson,
-  load, loadGoogleAccount, loadGoogleAccountVault, loadMuted,
-  player, sanitize, save, saveGoogleAccount, saveGoogleAccountVault,
+  clearGoogleAccount, exportAccountToken, exportSaveJson, getGoogleClientId,
+  importSaveJson, load, loadGoogleAccount, loadGoogleAccountVault, loadMuted,
+  parseAccountToken, player, sanitize, save, saveGoogleAccount, saveGoogleAccountVault,
   saveMuted, savePlayer, type Player,
 } from "./storage";
 import {
@@ -28,6 +28,18 @@ const saved = load();
 let state: State = saved.state;
 let level = -1;
 let activePlayer: Player = player();
+
+// Sincronização direta de conta via link (#sync=AURA_...)
+try {
+  if (window.location.hash.includes("sync=")) {
+    const fromHash = parseAccountToken(window.location.hash);
+    if (fromHash) {
+      activePlayer = fromHash;
+      savePlayer(activePlayer);
+      history.replaceState(null, "", window.location.pathname + window.location.search);
+    }
+  }
+} catch { /* ignore */ }
 let spinsState = loadSpins(todayBR());
 let wheelRot = 0;
 let isSpinning = false;
@@ -78,11 +90,21 @@ let lastRank: number | null = null;
 let lastAhead: ServerState["ahead"] = null;
 let myName: string | null = null;
 
-const sync = onlineEnabled ? createSync(activePlayer, onServer, ok => {
-  $("net").textContent = ok ? "Conectado: sua aura conta no ranking." : "Sem conexão. Seu progresso é enviado quando a conexão voltar.";
-  const st = $("acc-status");
-  if (st) st.textContent = ok ? "🟢 Conectado na Nuvem" : "🟡 Sem conexão com o servidor";
-}) : null;
+const sync = onlineEnabled ? createSync(
+  activePlayer,
+  onServer,
+  ok => {
+    $("net").textContent = ok ? "Conectado: sua aura conta no ranking." : "Sem conexão. Seu progresso é enviado quando a conexão voltar.";
+    const st = $("acc-status");
+    if (st) st.textContent = ok ? "🟢 Conectado na Nuvem" : "🟡 Sem conexão com o servidor";
+  },
+  () => {
+    // Quando outro jogador envia atualização via WebSocket, atualiza o ranking ao vivo
+    if (menu.open && tab === "ranking") {
+      void loadRanking(true);
+    }
+  }
+) : null;
 let firstSync = true;
 
 const LOCAL_COS_KEY = "clawd-aura-farm:cos-v1";
@@ -698,6 +720,24 @@ const menu = $<HTMLDialogElement>("menu");
 let tab = "ach";
 let list: "around" | "top" = "top";
 
+let rankingAutoInterval: ReturnType<typeof setInterval> | null = null;
+function stopRankingTimer() {
+  if (rankingAutoInterval) {
+    clearInterval(rankingAutoInterval);
+    rankingAutoInterval = null;
+  }
+}
+function startRankingTimer() {
+  stopRankingTimer();
+  rankingAutoInterval = setInterval(() => {
+    if (menu.open && tab === "ranking") {
+      void loadRanking(true);
+    } else {
+      stopRankingTimer();
+    }
+  }, 8000);
+}
+
 function openMenu(t: string) {
   tab = t;
   renderedMenu = "";
@@ -706,6 +746,9 @@ function openMenu(t: string) {
   if (t === "ranking") {
     updateMyRankHeader();
     void loadRanking();
+    startRankingTimer();
+  } else {
+    stopRankingTimer();
   }
 }
 for (const b of document.querySelectorAll<HTMLElement>(".menu-open, .tabs [data-tab]")) {
@@ -713,10 +756,15 @@ for (const b of document.querySelectorAll<HTMLElement>(".menu-open, .tabs [data-
 }
 $("menu-close").addEventListener("click", () => {
   if (menu.classList.contains("auth-required")) return;
+  stopRankingTimer();
   menu.close();
+});
+menu.addEventListener("close", () => {
+  stopRankingTimer();
 });
 menu.addEventListener("cancel", e => {
   if (menu.classList.contains("auth-required")) e.preventDefault();
+  else stopRankingTimer();
 });
 
 let renderedMenu = "";
@@ -922,8 +970,7 @@ function rankRow(e: RankRow) {
   const li = document.createElement("li");
   const isMe = Boolean(
     e.me ||
-    (myName && e.name.toLowerCase() === myName.toLowerCase()) ||
-    (lastRank !== null && e.rank === lastRank)
+    (myName && e.name.trim().toLowerCase() === myName.trim().toLowerCase())
   );
   if (isMe) li.className = "me";
 
@@ -1000,10 +1047,9 @@ function renderRankDistribution(rows: RankRow[]) {
   }
 }
 
-async function loadRanking() {
+async function loadRanking(silent = false) {
   const ol = $("top");
   const dist = $("rank-distribution");
-  if (dist) dist.hidden = true;
   for (const b of document.querySelectorAll<HTMLElement>(".subtabs [data-list]")) b.classList.toggle("on", b.dataset.list === list);
   if (!sync) {
     const localRow: RankRow = { rank: 1, name: myName || "Você (Modo Local)", lifetime: state.lifetime, prestige: state.prestige, equipped: state.equipped as Record<string, string>, me: true };
@@ -1012,7 +1058,9 @@ async function loadRanking() {
     ol.replaceChildren(rankRow(localRow));
     return;
   }
-  ol.replaceChildren(Object.assign(document.createElement("li"), { textContent: "Carregando…" }));
+  if (!silent && !ol.children.length) {
+    ol.replaceChildren(Object.assign(document.createElement("li"), { textContent: "Carregando…" }));
+  }
   try {
     const rows = list === "top" ? await sync.top() : await sync.around();
     updateMyRankHeader();
@@ -1020,12 +1068,15 @@ async function loadRanking() {
       ol.replaceChildren(Object.assign(document.createElement("li"), {
         textContent: list === "around" ? "Escolha um apelido acima para ver quem está perto de você, ou veja a aba Todos!" : "Ninguém ainda. Seja o primeiro!",
       }));
+      if (dist) dist.hidden = true;
       return;
     }
     renderRankDistribution(rows);
     ol.replaceChildren(...rows.map(rankRow));
   } catch {
-    ol.replaceChildren(Object.assign(document.createElement("li"), { textContent: "Não foi possível carregar o ranking." }));
+    if (!silent) {
+      ol.replaceChildren(Object.assign(document.createElement("li"), { textContent: "Não foi possível carregar o ranking." }));
+    }
   }
 }
 for (const b of document.querySelectorAll<HTMLElement>(".subtabs [data-list]")) {
@@ -1052,21 +1103,57 @@ interface GoogleWindow {
   };
 }
 
-function completeGoogleSignIn(info: { sub: string; email: string; name?: string; picture?: string }) {
+async function completeGoogleSignIn(info: { sub: string; email: string; name?: string; picture?: string }) {
   const normEmail = info.email.trim().toLowerCase();
+  const displayName = info.name?.trim() || null;
 
-  // Se o cofre desse Google tiver mais progresso que o navegador atual, restaura o cofre sem criar chave nova
-  const vault = loadGoogleAccountVault(normEmail);
-  if (vault && vault.state.lifetime > state.lifetime) {
-    activePlayer = vault.player;
-    state = vault.state;
-    savePlayer(activePlayer);
-    save(state);
-    sync?.setPlayer(activePlayer);
-    void sync?.flush();
+  // 1. Unificação na nuvem (Supabase RPC aura_google_auth): sincroniza PC ⇄ Celular
+  if (sync) {
+    try {
+      const authRes = await sync.googleAuth(activePlayer, normEmail, info.sub, displayName);
+      if (authRes && authRes.id && authRes.id !== activePlayer.id) {
+        // Encontrou a conta principal desse Google criada no outro dispositivo (ex: PC com 22,4 tri)
+        activePlayer = { id: authRes.id, secret: authRes.secret || activePlayer.secret };
+        savePlayer(activePlayer);
+        sync.setPlayer(activePlayer);
+        const srv = await sync.fetchState();
+        if (srv) {
+          state = toState(srv);
+          state.upgrades.cosmic = Math.max(state.upgrades.cosmic, localExt.cosmic);
+          save(state);
+        }
+      }
+    } catch {
+      // Fallback local se a RPC da nuvem ainda não estiver disponível
+      const vault = loadGoogleAccountVault(normEmail);
+      if (vault && vault.state.lifetime > state.lifetime) {
+        activePlayer = vault.player;
+        state = vault.state;
+        savePlayer(activePlayer);
+        save(state);
+        sync.setPlayer(activePlayer);
+        void sync.flush();
+      }
+    }
+  } else {
+    const vault = loadGoogleAccountVault(normEmail);
+    if (vault && vault.state.lifetime > state.lifetime) {
+      activePlayer = vault.player;
+      state = vault.state;
+      savePlayer(activePlayer);
+      save(state);
+    }
   }
 
-  // NUNCA cria chave nova nem reseta a conta atual: apenas vincula ao Google OAuth 2.0
+  // 2. Se o usuário ainda não tem apelido no jogo e o Google tem nome, define automaticamente
+  if ((!myName || myName.startsWith("Clawd #")) && displayName) {
+    const candidate = displayName.slice(0, 20);
+    if (candidate.length >= 2) {
+      void handleNicknameChange(candidate, null);
+    }
+  }
+
+  // 3. Salva no cofre local e no registro da conta Google
   saveGoogleAccountVault(normEmail, activePlayer, state);
   saveGoogleAccount({
     sub: info.sub,
@@ -1078,9 +1165,9 @@ function completeGoogleSignIn(info: { sub: string; email: string; name?: string;
   });
 
   const msg = $("google-oauth-msg");
-  if (msg) msg.textContent = `✅ Conectado via Google (${normEmail})! Sua conta está sincronizada e protegida.`;
+  if (msg) msg.textContent = `✅ Conectado via Google (${normEmail})! Sua conta está unificada em todos os dispositivos.`;
   sfx.welcome();
-  toast(`🎉 Conectado com Google (${normEmail})!`);
+  toast(`🎉 Conectado com Google (${normEmail})! Conta unificada.`);
 
   if (menu.classList.contains("auth-required")) {
     menu.classList.remove("auth-required");
@@ -1089,6 +1176,7 @@ function completeGoogleSignIn(info: { sub: string; email: string; name?: string;
   renderedMenu = "";
   renderAccount();
   render();
+  void loadRanking();
 }
 
 async function fetchGoogleUserProfile(accessToken: string) {
@@ -1100,7 +1188,7 @@ async function fetchGoogleUserProfile(accessToken: string) {
     if (!r.ok) throw new Error("Falha ao obter perfil do Google.");
     const data = await r.json();
     if (data && data.sub && data.email) {
-      completeGoogleSignIn({
+      await completeGoogleSignIn({
         sub: String(data.sub),
         email: String(data.email),
         name: data.name ? String(data.name) : undefined,
@@ -1210,6 +1298,58 @@ $<HTMLInputElement>("input-import-json")?.addEventListener("change", async e => 
   } catch (err) {
     toast("Falha ao restaurar: " + (err as Error).message);
   }
+});
+
+$("btn-copy-token")?.addEventListener("click", async () => {
+  const token = exportAccountToken(activePlayer);
+  try {
+    await navigator.clipboard.writeText(token);
+    toast("📋 Chave copiada! Cole no outro dispositivo para sincronizar.");
+    const msg = $("token-sync-msg");
+    if (msg) msg.textContent = "✅ Chave copiada! Cole no outro dispositivo em 'Conectar por Chave'.";
+    sfx.copy();
+  } catch {
+    prompt("Copie sua chave da conta abaixo:", token);
+  }
+});
+
+$("btn-paste-token")?.addEventListener("click", async () => {
+  const input = prompt("Cole a Chave da Conta (AURA_... ou URL com #sync=):");
+  if (!input) return;
+  const parsed = parseAccountToken(input);
+  if (!parsed) {
+    toast("❌ Chave inválida.");
+    const msg = $("token-sync-msg");
+    if (msg) msg.textContent = "❌ Chave inválida. Verifique o código digitado.";
+    return;
+  }
+  if (parsed.id === activePlayer.id) {
+    toast("Essa chave já é a conta ativa neste aparelho.");
+    return;
+  }
+  if (!confirm("Sincronizar esta conta? O progresso da nuvem será carregado neste aparelho.")) return;
+  activePlayer = parsed;
+  savePlayer(activePlayer);
+  if (sync) {
+    sync.setPlayer(activePlayer);
+    try {
+      const srv = await sync.fetchState();
+      if (srv) {
+        state = toState(srv);
+        state.upgrades.cosmic = Math.max(state.upgrades.cosmic, localExt.cosmic);
+        save(state);
+      }
+    } catch { /* ignore */ }
+    void sync.flush();
+  }
+  sfx.welcome();
+  toast("✅ Conta sincronizada com sucesso!");
+  const msg = $("token-sync-msg");
+  if (msg) msg.textContent = "✅ Conta conectada e sincronizada!";
+  renderedMenu = "";
+  renderAccount();
+  render();
+  void loadRanking();
 });
 
 // ===== eventos da roleta da sorte 67 =====

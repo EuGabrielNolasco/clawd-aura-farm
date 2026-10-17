@@ -66,19 +66,79 @@ export async function fetchPlayerState(p: Player): Promise<ServerState> {
   return rpc<ServerState>("aura_sync", { p_id: p.id, p_secret: p.secret, p_events: "" });
 }
 
-export function createSync(initialPlayer: Player, onSync: (r: ServerState, pending: string) => void, onStatus: (ok: boolean) => void) {
+export interface LivePlayerMeta {
+  name?: string;
+  equipped?: Record<string, string>;
+  lifetime?: number;
+  prestige?: number;
+}
+
+export function deduplicateRankRows(
+  rows: RankRow[],
+  liveMap?: Map<string, LivePlayerMeta>,
+  currentName?: string | null
+): RankRow[] {
+  const byKey = new Map<string, RankRow>();
+
+  for (const r of rows) {
+    if (!r || !r.name) continue;
+    const cleanName = r.name.trim();
+    if (!cleanName) continue;
+    const key = cleanName.toLowerCase();
+    const live = liveMap?.get(key);
+    const rowLifetime = Math.max(r.lifetime, live?.lifetime ?? 0);
+    const rowPrestige = Math.max(r.prestige ?? 0, live?.prestige ?? 0);
+    const rowEquipped = { ...(r.equipped ?? {}), ...(live?.equipped ?? {}) };
+    const isMe = Boolean(r.me || (currentName && key === currentName.trim().toLowerCase()));
+
+    const existing = byKey.get(key);
+    if (!existing) {
+      byKey.set(key, {
+        rank: r.rank,
+        name: cleanName,
+        lifetime: rowLifetime,
+        prestige: rowPrestige,
+        equipped: rowEquipped,
+        me: isMe,
+      });
+    } else {
+      // Já existe um registro com este apelido (ex: duplicata de sessão ou legado):
+      // mantém o que tem maior aura vitalícia e prestígio
+      const pickNewer = rowLifetime > existing.lifetime ||
+        (rowLifetime === existing.lifetime && rowPrestige > existing.prestige);
+      if (pickNewer) {
+        byKey.set(key, {
+          rank: existing.rank,
+          name: cleanName,
+          lifetime: rowLifetime,
+          prestige: rowPrestige,
+          equipped: { ...existing.equipped, ...rowEquipped },
+          me: existing.me || isMe,
+        });
+      } else {
+        existing.me = existing.me || isMe;
+        existing.equipped = { ...rowEquipped, ...existing.equipped };
+      }
+    }
+  }
+
+  const merged = Array.from(byKey.values());
+  merged.sort((a, b) => (b.lifetime - a.lifetime) || ((b.prestige ?? 0) - (a.prestige ?? 0)));
+  merged.forEach((r, idx) => { r.rank = idx + 1; });
+  return merged;
+}
+
+export function createSync(
+  initialPlayer: Player,
+  onSync: (r: ServerState, pending: string) => void,
+  onStatus: (ok: boolean) => void,
+  onRealtime?: () => void
+) {
   let p = initialPlayer;
   let queue = "";
   let inflight = false;
   let paused = false;
 
-  // Mapa em tempo real de perfil/enfeites por apelido (complementa o banco para todos os 36 efeitos e novos upgrades)
-  interface LivePlayerMeta {
-    name?: string;
-    equipped?: Record<string, string>;
-    lifetime?: number;
-    prestige?: number;
-  }
   const livePlayerByName = new Map<string, LivePlayerMeta>();
   let ws: WebSocket | null = null;
   let wsReady = false;
@@ -121,14 +181,17 @@ export function createSync(initialPlayer: Player, onSync: (r: ServerState, pendi
           const msg = JSON.parse(String(ev.data));
           if (msg.event === "broadcast" && msg.payload?.event === "cosmetics_update") {
             applyLiveMeta(msg.payload.payload as LivePlayerMeta);
+            onRealtime?.();
           } else if (msg.event === "presence_state" && msg.payload && typeof msg.payload === "object") {
             for (const entry of Object.values(msg.payload) as { metas?: LivePlayerMeta[] }[]) {
               applyLiveMeta(entry?.metas?.[0]);
             }
+            onRealtime?.();
           } else if (msg.event === "presence_diff" && msg.payload?.joins && typeof msg.payload.joins === "object") {
             for (const entry of Object.values(msg.payload.joins) as { metas?: LivePlayerMeta[] }[]) {
               applyLiveMeta(entry?.metas?.[0]);
             }
+            onRealtime?.();
           }
         } catch { /* ignore */ }
       });
@@ -175,21 +238,7 @@ export function createSync(initialPlayer: Player, onSync: (r: ServerState, pendi
     }
   }, 25000);
 
-  function mergeRankRows(rows: RankRow[]): RankRow[] {
-    const merged = rows.map(r => {
-      const live = r.name ? livePlayerByName.get(r.name.toLowerCase()) : undefined;
-      if (!live) return r;
-      return {
-        ...r,
-        lifetime: Math.max(r.lifetime, live.lifetime ?? 0),
-        prestige: Math.max(r.prestige, live.prestige ?? 0),
-        equipped: live.equipped ? { ...r.equipped, ...live.equipped } : r.equipped,
-      };
-    });
-    merged.sort((a, b) => b.lifetime - a.lifetime);
-    merged.forEach((r, idx) => { r.rank = idx + 1; });
-    return merged;
-  }
+  const mergeRankRows = (rows: RankRow[]) => deduplicateRankRows(rows, livePlayerByName, currentName);
 
   async function flush() {
     if (inflight || paused) return;
@@ -226,11 +275,30 @@ export function createSync(initialPlayer: Player, onSync: (r: ServerState, pendi
     flush,
     getPlayer: () => p,
     setPlayer(newP: Player) { p = newP; queue = ""; },
-    setName: (name: string) => rpc<void>("aura_set_name", { p_id: p.id, p_secret: p.secret, p_name: name }),
+    setName: (name: string) => {
+      currentName = name;
+      return rpc<void>("aura_set_name", { p_id: p.id, p_secret: p.secret, p_name: name });
+    },
     broadcastCosmetics: (name: string | null, equipped: Record<string, string>, lifetime = 0, prestige = 0) =>
       sendCosmeticsBroadcast(name, equipped, lifetime, prestige),
     top: async () => mergeRankRows(await rpc<RankRow[]>("aura_top", { p_limit: 50 })),
     around: async () => mergeRankRows(await rpc<RankRow[]>("aura_around", { p_id: p.id, p_secret: p.secret })),
+    googleAuth: async (curP: Player, email: string, sub: string, name?: string | null) =>
+      rpc<{
+        action: "linked" | "switched";
+        id: string;
+        secret: string;
+        name: string | null;
+        lifetime: number;
+        prestige: number;
+      }>("aura_google_auth", {
+        p_id: curP.id,
+        p_secret: curP.secret,
+        p_email: email,
+        p_sub: sub,
+        p_name: name ?? null,
+      }),
+    fetchState: async () => fetchPlayerState(p),
   };
 }
 

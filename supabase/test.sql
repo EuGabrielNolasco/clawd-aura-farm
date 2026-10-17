@@ -191,4 +191,15 @@ do $$ begin
   raise exception 'aura_around aceitou segredo errado';
 exception when invalid_authorization_specification then null; end $$;
 
+-- ===== autenticação e unificação de contas Google OAuth 2.0 =====
+do $$ declare r jsonb; begin
+  -- Vincula jogador 1 ao Google
+  r := public.aura_google_auth(pg_temp.pid(1), repeat('s', 32), 'gabriel@teste.com', 'google_sub_123', 'Gabriel');
+  assert r->>'action' = 'linked', 'vinculação Google falhou: ' || r::text;
+
+  -- Jogador 2 em outro dispositivo com o mesmo Google deve adotar o jogador 1
+  r := public.aura_google_auth(pg_temp.pid(2), repeat('s', 32), 'gabriel@teste.com', 'google_sub_123', 'Gabriel');
+  assert r->>'action' = 'switched' and (r->>'id')::uuid = pg_temp.pid(1), 'unificação de conta Google falhou: ' || r::text;
+end $$;
+
 \echo 'servidor: todos os testes passaram'

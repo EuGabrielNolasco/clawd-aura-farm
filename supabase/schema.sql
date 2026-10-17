@@ -40,16 +40,29 @@ alter table public.aura_players
   add column if not exists equipped jsonb not null default '{}',
   add column if not exists golden_at timestamptz,
   add column if not exists buff_until timestamptz not null default 'epoch',
-  add column if not exists thief_at timestamptz;
+  add column if not exists thief_at timestamptz,
+  add column if not exists google_email text,
+  add column if not exists google_sub text,
+  add column if not exists account_secret text;
 -- a versão anterior guardava o recorde em "best": leva para "lifetime" antes de remover
 do $$ begin
   if exists (select from information_schema.columns where table_schema = 'public' and table_name = 'aura_players' and column_name = 'best') then
     update public.aura_players set lifetime = greatest(lifetime, best, total);
     alter table public.aura_players drop column best;
   end if;
+
+  -- Remove registros duplicados mantendo o jogador com maior progresso vitalício
+  with ranked as (
+    select id, row_number() over (partition by lower(name) order by lifetime desc, last_seen desc) as rn
+      from public.aura_players
+     where name is not null
+  )
+  delete from public.aura_players
+   where id in (select id from ranked where rn > 1);
 end $$;
 
 create unique index if not exists aura_players_name_key on public.aura_players (lower(name)) where name is not null;
+create index if not exists aura_players_google_email_idx on public.aura_players (lower(google_email)) where google_email is not null;
 drop index if exists public.aura_players_best_idx;
 create index if not exists aura_players_lifetime_idx on public.aura_players (lifetime desc) where name is not null;
 create index if not exists aura_players_created_idx on public.aura_players (created_at);
@@ -314,13 +327,24 @@ begin
          equipped = p.equipped, golden_at = p.golden_at, buff_until = p.buff_until, thief_at = p.thief_at
    where id = p.id;
 
-  -- posição no ranking e quem está logo à frente
-  if p.name is not null then
-    select count(*) + 1 into v_rank from public.aura_players where name is not null and lifetime > p.lifetime;
-    select jsonb_build_object('name', a.name, 'lifetime', a.lifetime, 'rank', v_rank - 1) into v_ahead
+  -- posição no ranking e quem está logo à frente (calcula para quem tem progresso ou nome)
+  if p.lifetime > 0 or p.name is not null then
+    select count(*) + 1 into v_rank
+      from (
+        select distinct on (lower(coalesce(name, 'Clawd #' || upper(substr(id::text, 1, 4))))) lifetime
+          from public.aura_players
+         where lifetime > p.lifetime
+      ) r;
+
+    select jsonb_build_object(
+             'name', coalesce(a.name, 'Clawd #' || upper(substr(a.id::text, 1, 4))),
+             'lifetime', a.lifetime,
+             'rank', v_rank - 1
+           ) into v_ahead
       from public.aura_players a
-     where a.name is not null and a.lifetime > p.lifetime
-     order by a.lifetime asc limit 1;
+     where a.lifetime > p.lifetime
+     order by a.lifetime asc
+     limit 1;
   end if;
 
   return jsonb_build_object(
@@ -341,11 +365,21 @@ end $$;
 create or replace function public.aura_set_name(p_id uuid, p_secret text, p_name text)
 returns void
 language plpgsql security definer set search_path = '' as $$
-declare v_name text := btrim(regexp_replace(coalesce(p_name, ''), '\s+', ' ', 'g'));
+declare
+  v_name text := btrim(regexp_replace(coalesce(p_name, ''), '\s+', ' ', 'g'));
+  v_existing_id uuid;
 begin
-  if v_name !~ '^[A-Za-zÀ-ÖØ-öø-ÿ0-9 _.-]{3,20}$' then
-    raise exception 'apelido inválido: use de 3 a 20 letras, números, espaço, _ . ou -' using errcode = '22023';
+  if v_name !~ '^[A-Za-zÀ-ÖØ-öø-ÿ0-9 _.-]{2,20}$' then
+    raise exception 'apelido inválido: use de 2 a 20 letras, números, espaço, _ . ou -' using errcode = '22023';
   end if;
+
+  select id into v_existing_id
+    from public.aura_players
+   where lower(name) = lower(v_name) and id <> p_id;
+  if v_existing_id is not null then
+    raise exception 'esse apelido já está em uso' using errcode = '23505';
+  end if;
+
   update public.aura_players set name = v_name
    where id = p_id and secret_hash = encode(sha256(convert_to(p_secret, 'UTF8')), 'hex');
   if not found then
@@ -359,23 +393,39 @@ end $$;
 drop function if exists public.aura_reset(uuid, text);
 
 drop function if exists public.aura_top(int);
-create or replace function public.aura_top(p_limit int default 10)
+create or replace function public.aura_top(p_limit int default 50)
 returns table (rank bigint, name text, lifetime double precision, prestige int, equipped jsonb)
 language sql stable security definer set search_path = '' as $$
-  select row_number() over (order by lifetime desc, created_at), name, lifetime, prestige, equipped
-    from public.aura_players
-   where name is not null and lifetime > 0
-   order by lifetime desc, created_at
-   limit least(greatest(coalesce(p_limit, 10), 1), 50)
+  with ranked as (
+    select distinct on (lower(coalesce(name, 'Clawd #' || upper(substr(id::text, 1, 4)))))
+           coalesce(name, 'Clawd #' || upper(substr(id::text, 1, 4))) as player_name,
+           lifetime,
+           prestige,
+           equipped,
+           created_at
+      from public.aura_players
+     where lifetime > 0
+     order by lower(coalesce(name, 'Clawd #' || upper(substr(id::text, 1, 4)))), lifetime desc, created_at asc
+  )
+  select row_number() over (order by lifetime desc, created_at asc) as rank,
+         player_name as name,
+         lifetime,
+         prestige,
+         equipped
+    from ranked
+   order by lifetime desc, created_at asc
+   limit least(greatest(coalesce(p_limit, 50), 1), 100)
 $$;
 
 /** Os 3 jogadores logo acima, você e os 2 logo abaixo. */
+drop function if exists public.aura_around(uuid, text);
 create or replace function public.aura_around(p_id uuid, p_secret text)
 returns table (rank bigint, name text, lifetime double precision, prestige int, equipped jsonb, me boolean)
 language plpgsql stable security definer set search_path = '' as $$
 #variable_conflict use_column
 declare
   me public.aura_players;
+  v_my_name text;
   v_rank bigint;
 begin
   select * into me from public.aura_players
@@ -383,22 +433,104 @@ begin
   if not found then
     raise exception 'jogador inválido' using errcode = '28000';
   end if;
-  if me.name is null then return; end if;
-  select count(*) + 1 into v_rank from public.aura_players a where a.name is not null and a.lifetime > me.lifetime;
+
+  v_my_name := coalesce(me.name, 'Clawd #' || upper(substr(me.id::text, 1, 4)));
+
+  select count(*) + 1 into v_rank
+    from (
+      select distinct on (lower(coalesce(a.name, 'Clawd #' || upper(substr(a.id::text, 1, 4))))) a.lifetime
+        from public.aura_players a
+       where a.lifetime > me.lifetime and a.id <> me.id
+    ) t;
+
   return query
     select * from (
-      select v_rank - row_number() over (order by a.lifetime asc), a.name, a.lifetime, a.prestige, a.equipped, false
-        from (select * from public.aura_players a
-               where a.name is not null and a.lifetime > me.lifetime
-               order by a.lifetime asc limit 3) a
+      select v_rank - row_number() over (order by a.lifetime asc),
+             a.player_name, a.lifetime, a.prestige, a.equipped, false
+        from (select distinct on (lower(coalesce(a.name, 'Clawd #' || upper(substr(a.id::text, 1, 4)))))
+                     coalesce(a.name, 'Clawd #' || upper(substr(a.id::text, 1, 4))) as player_name,
+                     a.lifetime, a.prestige, a.equipped
+                from public.aura_players a
+               where a.lifetime > me.lifetime and a.id <> me.id
+               order by lower(coalesce(a.name, 'Clawd #' || upper(substr(a.id::text, 1, 4)))), a.lifetime asc limit 3) a
       union all
-      select v_rank, me.name, me.lifetime, me.prestige, me.equipped, true
+      select v_rank, v_my_name, me.lifetime, me.prestige, me.equipped, true
       union all
-      select v_rank + row_number() over (order by a.lifetime desc, a.created_at), a.name, a.lifetime, a.prestige, a.equipped, false
-        from (select * from public.aura_players a
-               where a.name is not null and a.lifetime <= me.lifetime and a.id <> me.id
-               order by a.lifetime desc, a.created_at limit 2) a
+      select v_rank + row_number() over (order by a.lifetime desc, a.created_at),
+             a.player_name, a.lifetime, a.prestige, a.equipped, false
+        from (select distinct on (lower(coalesce(a.name, 'Clawd #' || upper(substr(a.id::text, 1, 4)))))
+                     coalesce(a.name, 'Clawd #' || upper(substr(a.id::text, 1, 4))) as player_name,
+                     a.lifetime, a.prestige, a.equipped, a.created_at
+                from public.aura_players a
+               where a.lifetime <= me.lifetime and a.id <> me.id
+               order by lower(coalesce(a.name, 'Clawd #' || upper(substr(a.id::text, 1, 4)))), a.lifetime desc, a.created_at limit 2) a
     ) t order by 1;
+end $$;
+
+/** Vincula e unifica contas via Google OAuth 2.0 (sincroniza PC ⇄ Celular). */
+create or replace function public.aura_google_auth(
+  p_id uuid,
+  p_secret text,
+  p_email text,
+  p_sub text,
+  p_name text default null
+)
+returns jsonb
+language plpgsql security definer set search_path = '' as $$
+declare
+  v_norm_email text := lower(btrim(coalesce(p_email, '')));
+  v_existing public.aura_players;
+  v_current public.aura_players;
+  v_hash text;
+begin
+  if v_norm_email = '' or p_sub is null or length(p_sub) < 3 then
+    raise exception 'dados de login Google inválidos' using errcode = '22023';
+  end if;
+
+  v_hash := encode(sha256(convert_to(p_secret, 'UTF8')), 'hex');
+  select * into v_current from public.aura_players where id = p_id and secret_hash = v_hash;
+
+  -- Procura se já existe um jogador vinculado a esse e-mail do Google (ex: criado no PC)
+  select * into v_existing from public.aura_players
+   where lower(google_email) = v_norm_email
+   order by lifetime desc, created_at asc
+   limit 1;
+
+  if v_existing.id is not null and v_existing.id <> p_id then
+    return jsonb_build_object(
+      'action', 'switched',
+      'id', v_existing.id,
+      'secret', coalesce(v_existing.account_secret, p_secret),
+      'name', v_existing.name,
+      'lifetime', v_existing.lifetime,
+      'prestige', v_existing.prestige
+    );
+  end if;
+
+  if v_current.id is null then
+    insert into public.aura_players (id, secret_hash, rng, account_secret, google_email, google_sub, name)
+    values (p_id, v_hash, 1 + floor(random() * 2147483645)::bigint, p_secret, v_norm_email, p_sub, p_name)
+    on conflict (id) do update set
+      google_email = v_norm_email,
+      google_sub = p_sub,
+      account_secret = p_secret;
+  else
+    update public.aura_players
+       set google_email = v_norm_email,
+           google_sub = p_sub,
+           account_secret = p_secret,
+           name = coalesce(name, p_name)
+     where id = p_id;
+  end if;
+
+  return jsonb_build_object(
+    'action', 'linked',
+    'id', p_id,
+    'secret', p_secret,
+    'name', coalesce(v_current.name, p_name),
+    'lifetime', coalesce(v_current.lifetime, 0),
+    'prestige', coalesce(v_current.prestige, 0)
+  );
 end $$;
 
 revoke all on function public.aura_level(double precision) from public, anon, authenticated;
@@ -409,7 +541,9 @@ revoke all on function public.aura_sync(uuid, text, text) from public, anon, aut
 revoke all on function public.aura_set_name(uuid, text, text) from public, anon, authenticated;
 revoke all on function public.aura_top(int) from public, anon, authenticated;
 revoke all on function public.aura_around(uuid, text) from public, anon, authenticated;
+revoke all on function public.aura_google_auth(uuid, text, text, text, text) from public, anon, authenticated;
 grant execute on function public.aura_sync(uuid, text, text) to anon, authenticated;
 grant execute on function public.aura_set_name(uuid, text, text) to anon, authenticated;
 grant execute on function public.aura_top(int) to anon, authenticated;
 grant execute on function public.aura_around(uuid, text) to anon, authenticated;
+grant execute on function public.aura_google_auth(uuid, text, text, text, text) to anon, authenticated;
