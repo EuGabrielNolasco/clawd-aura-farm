@@ -3,7 +3,7 @@ import { ACHIEVEMENTS, achievementProgress, checkAchievements } from "./achievem
 import { COSMETICS, cosmeticById, SLOTS, type Slot } from "./cosmetics";
 import {
   allMaxed, applyEvent, buffActive, canBuy, canPrestige, clickGain, comboFor, costOf, daily, earn, EV,
-  goldenVisible, isMaxed, LEVEL_BONUS, levelOf, LV, mult, nowSec, parseEvents, passive, passivePerSecond,
+  goldenVisible, isMaxed, LEVEL_BONUS, levelOf, LV, mult, nowSec, passive, passivePerSecond,
   PRESTIGE_BONUS, RANKS, schedule, thiefVisible, todayBR, UPGRADES, type State,
 } from "./game";
 import { createFx, reduceMotion } from "./fx";
@@ -144,8 +144,18 @@ const localExt = loadLocalExt();
 state.upgrades.ia = Math.max(state.upgrades.ia, localExt.ia);
 state.upgrades.portal = Math.max(state.upgrades.portal, localExt.portal);
 state.upgrades.cosmic = Math.max(state.upgrades.cosmic, localExt.cosmic);
+if (localExt.buffUntil) state.buffUntil = Math.max(state.buffUntil, localExt.buffUntil);
 
-function enforceLocalCosmetics() {
+const TOKENS_RESTORED_KEY = "clawd-aura-farm:tokens-restored-v3";
+
+function getAchievementTokens(): number {
+  return state.achievements.reduce((sum, id) => {
+    const a = ACHIEVEMENTS.find(x => x.id === id);
+    return sum + (a ? a.reward : 0);
+  }, 0);
+}
+
+function enforceLocalCosmetics(serverTokens?: number) {
   for (const id of localCos.owned) {
     if (!state.owned.includes(id) && cosmeticById(id)) {
       state.owned.push(id);
@@ -158,62 +168,63 @@ function enforceLocalCosmetics() {
       state.equipped[slot] = val;
     }
   }
-  // Fichas 67 vêm EXCLUSIVAMENTE de conquistas concluídas e pegas na roleta (menos enfeites comprados)
-  const achTokens = state.achievements.reduce((sum, id) => {
-    const a = ACHIEVEMENTS.find(x => x.id === id);
-    return sum + (a ? a.reward : 0);
-  }, 0);
-  const spentTokens = state.owned.reduce((sum, id) => {
-    const c = cosmeticById(id);
-    return sum + (c ? c.price : 0);
-  }, 0);
-  state.tokens = Math.max(0, achTokens + getWheelTokensWon() - spentTokens);
+
+  // Restaura as Fichas 67 que estavam na conta do jogador (servidor / conquistas / roleta) sem nunca zerar
+  try {
+    const alreadyRestored = localStorage.getItem(TOKENS_RESTORED_KEY) === "1";
+    if (!alreadyRestored) {
+      const wheelTokens = getWheelTokensWon();
+      const achTokens = getAchievementTokens();
+      if (typeof serverTokens === "number") {
+        state.tokens = Math.max(state.tokens, serverTokens + wheelTokens, achTokens + wheelTokens);
+        localStorage.setItem(TOKENS_RESTORED_KEY, "1");
+      } else if (state.tokens === 0 && (achTokens > 0 || wheelTokens > 0)) {
+        state.tokens = Math.max(state.tokens, achTokens + wheelTokens);
+      }
+    }
+  } catch { /* ignore */ }
 }
 
 enforceLocalCosmetics();
-if (myName) sync?.broadcastCosmetics(myName, state.equipped as Record<string, string>);
+if (myName) sync?.broadcastCosmetics(myName, state.equipped as Record<string, string>, state.lifetime, state.prestige);
 let nameInputPrefilled = false;
 let settingName = false;
 
-function onServer(r: ServerState, pending: string) {
+function onServer(r: ServerState, _pending: string) {
   clockOffset = r.now - nowSec();
-  const prevState = state;
-  state = toState(r);
+  const srv = toState(r);
 
-  if (r.ups.length < 8) {
+  if (firstSync && state.lifetime === 0 && srv.lifetime > 0) {
+    // Dispositivo/navegador novo: restaura o estado salvo na nuvem
+    state = srv;
     state.upgrades.ia = Math.max(state.upgrades.ia, localExt.ia);
     state.upgrades.portal = Math.max(state.upgrades.portal, localExt.portal);
     state.upgrades.cosmic = Math.max(state.upgrades.cosmic, localExt.cosmic);
-    state.aura = Math.max(0, state.aura + localExt.bonusAura - localExt.spentAura);
-    state.total += localExt.bonusAura;
-    state.lifetime += localExt.bonusAura;
-  }
-  if (localExt.buffUntil && localExt.buffUntil > state.buffUntil) {
-    state.buffUntil = localExt.buffUntil;
-  }
-
-  // Se o progresso local for maior (ex: jogou offline ou restaurou backup), preserva os maiores valores
-  if (prevState.lifetime > state.lifetime) {
-    state.aura = Math.max(state.aura, prevState.aura);
-    state.total = Math.max(state.total, prevState.total);
-    state.lifetime = Math.max(state.lifetime, prevState.lifetime);
-    state.prestige = Math.max(state.prestige, prevState.prestige);
+    if (r.offline >= 60) welcomeBack(r.offline, r.offline_gain);
+  } else {
+    // Jogador já ativo localmente: NUNCA reduz aura, fichas, upgrades ou buffs locais!
+    if (firstSync && srv.lifetime > state.lifetime && srv.prestige >= state.prestige) {
+      state.aura = Math.max(state.aura, srv.aura);
+      state.total = Math.max(state.total, srv.total);
+      state.lifetime = Math.max(state.lifetime, srv.lifetime);
+      state.prestige = Math.max(state.prestige, srv.prestige);
+    }
     for (const u of UPGRADES) {
-      state.upgrades[u.id] = Math.max(state.upgrades[u.id], prevState.upgrades[u.id]);
+      state.upgrades[u.id] = Math.max(state.upgrades[u.id], srv.upgrades[u.id]);
     }
-    for (const a of prevState.achievements) {
-      if (!state.achievements.includes(a)) state.achievements.push(a);
+    for (const id of srv.owned) {
+      if (!state.owned.includes(id) && cosmeticById(id)) state.owned.push(id);
+    }
+    for (const id of srv.achievements) {
+      if (!state.achievements.includes(id)) {
+        state.achievements.push(id);
+        achievementUnlocked(id, true);
+      }
     }
   }
 
-  enforceLocalCosmetics();
-
-  for (const [c, a] of parseEvents(pending)) applyEvent(state, c, a, combo(), now());
-  enforceLocalCosmetics();
+  enforceLocalCosmetics(r.tokens);
   save(state);
-  if (firstSync && r.offline >= 60) welcomeBack(r.offline, r.offline_gain);
-  if (r.daily > 0) dailyReward(state.streak);
-  for (const id of r.new_achievements ?? []) achievementUnlocked(id);
   firstSync = false;
 
   if (r.name && !settingName) {
@@ -221,7 +232,7 @@ function onServer(r: ServerState, pending: string) {
     localCos.name = r.name;
     saveLocalCos(localCos);
   }
-  sync?.broadcastCosmetics(myName, state.equipped as Record<string, string>);
+  sync?.broadcastCosmetics(myName, state.equipped as Record<string, string>, state.lifetime, state.prestige);
   if (r.name && lastRank && r.rank && r.rank < lastRank && lastAhead) {
     toast(`🚀 Você passou ${lastAhead.name}! Agora é #${r.rank} no ranking.`);
     sfx.overtake();
@@ -270,12 +281,13 @@ function dailyReward(streak: number) {
   sfx.daily();
 }
 
-function achievementUnlocked(id: string) {
+function achievementUnlocked(id: string, addReward = false) {
   const a = ACHIEVEMENTS.find(x => x.id === id);
   if (!a) return;
-  enforceLocalCosmetics();
+  if (addReward) state.tokens += a.reward;
   spinsState.spins = addSpin();
   updateWheelBadge();
+  save(state);
   toast(`🎖 Conquista: ${a.name} (+${a.reward} Fichas 67 e +1 giro na Roleta!)`);
   sfx.achievement();
 }
@@ -294,10 +306,6 @@ function trackMission(stat: MissionStat, amount = 1) {
 
 /** Aplica um evento local e, no modo online, manda para o servidor. */
 function act(code: string, arg = "") {
-  const prevAura = state.aura;
-  const prevIa = state.upgrades.ia;
-  const prevPortal = state.upgrades.portal;
-  const prevCosmic = state.upgrades.cosmic;
   const r = applyEvent(state, code, arg, combo(), now());
   if (code === EV.prestige || code === EV.reset) {
     localExt.ia = 0;
@@ -307,23 +315,10 @@ function act(code: string, arg = "") {
     localExt.spentAura = 0;
     localExt.buffUntil = 0;
     saveLocalExt(localExt);
-  } else if (code === "i" && state.upgrades.ia > prevIa) {
+  } else {
     localExt.ia = state.upgrades.ia;
-    localExt.spentAura += prevAura - state.aura;
-    saveLocalExt(localExt);
-    save(state);
-  } else if (code === "o" && state.upgrades.portal > prevPortal) {
     localExt.portal = state.upgrades.portal;
-    localExt.spentAura += prevAura - state.aura;
-    saveLocalExt(localExt);
-    save(state);
-  } else if (code === "x" && state.upgrades.cosmic > prevCosmic) {
     localExt.cosmic = state.upgrades.cosmic;
-    saveLocalExt(localExt);
-    save(state);
-  } else if (code === EV.click && r && state.upgrades.portal > 0) {
-    const portalShare = (1.0 * state.upgrades.portal) / (1 + 0.5 * state.upgrades.click + 1.0 * state.upgrades.portal);
-    localExt.bonusAura += r.gain * portalShare;
     saveLocalExt(localExt);
   }
   if (code === EV.buyCosmetic || code === EV.equip || code === EV.unequip) {
@@ -339,11 +334,10 @@ function act(code: string, arg = "") {
     for (const sl of SLOTS) {
       localCos.equipped[sl.id] = state.equipped[sl.id] ?? null;
     }
-    enforceLocalCosmetics();
     saveLocalCos(localCos);
-    save(state);
-    sync?.broadcastCosmetics(myName, state.equipped as Record<string, string>);
+    sync?.broadcastCosmetics(myName, state.equipped as Record<string, string>, state.lifetime, state.prestige);
   }
+  save(state);
   sync?.push(code + arg);
   return r;
 }
@@ -534,7 +528,7 @@ function render() {
   updateEvents();
   updateWheelBadge();
   if (menu.open) renderMenu();
-  if (!sync) save(state);
+  save(state);
 }
 
 function farm(ev?: MouseEvent) {
@@ -558,7 +552,7 @@ function farm(ev?: MouseEvent) {
 }
 
 
-// ===== modo local: o navegador faz o papel do servidor =====
+// ===== verificação contínua de eventos, login diário, conquistas e cofre Google =====
 function localTick() {
   schedule(state, now());
   const reward = daily(state, todayBR());
@@ -568,7 +562,7 @@ function localTick() {
   if (gAcc) saveGoogleAccountVault(gAcc.email, activePlayer, state);
 }
 
-// aura passiva local, para o contador andar suave; no online o servidor corrige a cada sincronização
+// aura passiva local, para o contador andar suave e salvar sempre
 let lastTick = performance.now();
 setInterval(() => {
   const t = performance.now();
@@ -580,7 +574,7 @@ setInterval(() => {
     saveLocalExt(localExt);
   }
   lastTick = t;
-  if (!sync) localTick();
+  localTick();
   render();
 }, 250);
 
@@ -835,9 +829,11 @@ function rankRow(e: RankRow) {
   );
   if (isMe) li.className = "me";
 
-  const lvl = levelOf(e.lifetime);
+  const rowLifetime = isMe ? Math.max(e.lifetime, state.lifetime) : e.lifetime;
+  const rowPrestige = isMe ? Math.max(e.prestige || 0, state.prestige || 0) : (e.prestige || 0);
+  const lvl = levelOf(rowLifetime);
   const rankTitle = RANKS[lvl][1];
-  const rebirths = e.prestige || 0;
+  const rebirths = rowPrestige;
 
   const pos = document.createElement("span");
   pos.className = "pos";
@@ -876,7 +872,7 @@ function rankRow(e: RankRow) {
 
   const aura = document.createElement("b");
   aura.className = "rank-aura";
-  aura.textContent = fmtShort(e.lifetime);
+  aura.textContent = fmtShort(rowLifetime);
 
   li.append(pos, pic, info, aura);
   return li;
@@ -1131,7 +1127,6 @@ $("wheel-spin-btn")?.addEventListener("click", () => {
     localExt.buffUntil = state.buffUntil;
     saveLocalExt(localExt);
   }
-  enforceLocalCosmetics();
   save(state);
 
   wheelRot = res.degrees;
@@ -1147,11 +1142,21 @@ $("wheel-spin-btn")?.addEventListener("click", () => {
     clearInterval(tickInterval);
     isSpinning = false;
     sfx.wheelWin();
+    if (res.prize.id === "megabrain" || res.prize.id === "overdrive_67") {
+      sfx.megaBrain();
+      const b = $("banner");
+      b.innerHTML = `<small>ROLETA 67 ATIVOU</small>MEGA BRAIN`;
+      replay(b, "show");
+      fx.flash();
+    }
     $("wheel-result").textContent = `🎉 ${res.message}`;
     toast(`🎰 Roleta: ${res.message}`);
     const r = $("wheel-disc").getBoundingClientRect();
     fx.burst(r.left + r.width / 2, r.top + r.height / 2, null, 25);
+    save(state);
+    sync?.broadcastCosmetics(myName, state.equipped as Record<string, string>, state.lifetime, state.prestige);
     updateWheelBadge();
+    renderedMenu = "";
     render();
   }, 4000);
 });
@@ -1176,7 +1181,7 @@ async function handleNicknameChange(rawName: string, msgEl: HTMLElement | null) 
 
     if (sync) {
       await sync.setName(enteredName);
-      sync.broadcastCosmetics(myName, state.equipped as Record<string, string>);
+      sync.broadcastCosmetics(myName, state.equipped as Record<string, string>, state.lifetime, state.prestige);
       await sync.flush();
       void loadRanking();
     }
@@ -1197,6 +1202,13 @@ document.getElementById("acc-name-form")?.addEventListener("submit", e => {
   void handleNicknameChange(val, document.getElementById("acc-name-msg"));
 });
 
+if (saved.away >= 60 && state.lifetime > 0) {
+  const before = state.total;
+  passive(state, saved.away, now());
+  if (state.total > before) welcomeBack(saved.away, state.total - before);
+}
+localTick();
+
 if (sync) {
   $("ranking-open").hidden = false;
   $("tab-ranking").hidden = false;
@@ -1206,14 +1218,6 @@ if (sync) {
     void handleNicknameChange(val, $("name-msg"));
   });
   void sync.flush();
-} else {
-  // modo local: credita o tempo fora, com o mesmo teto do servidor
-  if (saved.away >= 60) {
-    const before = state.total;
-    passive(state, saved.away, now());
-    welcomeBack(saved.away, state.total - before);
-  }
-  localTick();
 }
 
 if (!loadGoogleAccount() && state.lifetime === 0 && getGoogleClientId()) {

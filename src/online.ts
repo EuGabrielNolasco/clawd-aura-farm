@@ -74,13 +74,33 @@ export function createSync(initialPlayer: Player, onSync: (r: ServerState, pendi
   let inflight = false;
   let paused = false;
 
-  // Mapa em tempo real de enfeites equipados por apelido (complementa o banco para todos os 36 efeitos)
-  const liveEquippedByName = new Map<string, Record<string, string>>();
+  // Mapa em tempo real de perfil/enfeites por apelido (complementa o banco para todos os 36 efeitos e novos upgrades)
+  interface LivePlayerMeta {
+    name?: string;
+    equipped?: Record<string, string>;
+    lifetime?: number;
+    prestige?: number;
+  }
+  const livePlayerByName = new Map<string, LivePlayerMeta>();
   let ws: WebSocket | null = null;
   let wsReady = false;
   let lastBroadcastPayload = "";
   let currentName: string | null = null;
   let currentEquipped: Record<string, string> = {};
+  let currentLifetime = 0;
+  let currentPrestige = 0;
+
+  function applyLiveMeta(meta: LivePlayerMeta | undefined) {
+    if (!meta || typeof meta.name !== "string") return;
+    const key = meta.name.toLowerCase();
+    const prev = livePlayerByName.get(key) ?? {};
+    livePlayerByName.set(key, {
+      name: meta.name,
+      equipped: meta.equipped && typeof meta.equipped === "object" ? meta.equipped : prev.equipped,
+      lifetime: typeof meta.lifetime === "number" ? Math.max(prev.lifetime ?? 0, meta.lifetime) : prev.lifetime,
+      prestige: typeof meta.prestige === "number" ? Math.max(prev.prestige ?? 0, meta.prestige) : prev.prestige,
+    });
+  }
 
   function connectRealtime() {
     if (!URL_ || !KEY || typeof WebSocket === "undefined") return;
@@ -96,29 +116,20 @@ export function createSync(initialPlayer: Player, onSync: (r: ServerState, pendi
           payload: { config: { broadcast: { self: false }, presence: { key: p.id } } },
           ref: "1",
         }));
-        if (currentName) sendCosmeticsBroadcast(currentName, currentEquipped, true);
+        if (currentName) sendCosmeticsBroadcast(currentName, currentEquipped, currentLifetime, currentPrestige, true);
       });
       socket.addEventListener("message", ev => {
         try {
           const msg = JSON.parse(String(ev.data));
           if (msg.event === "broadcast" && msg.payload?.event === "cosmetics_update") {
-            const pl = msg.payload.payload;
-            if (pl && typeof pl.name === "string" && pl.equipped && typeof pl.equipped === "object") {
-              liveEquippedByName.set(pl.name.toLowerCase(), pl.equipped as Record<string, string>);
-            }
+            applyLiveMeta(msg.payload.payload as LivePlayerMeta);
           } else if (msg.event === "presence_state" && msg.payload && typeof msg.payload === "object") {
-            for (const entry of Object.values(msg.payload) as { metas?: { name?: string; equipped?: Record<string, string> }[] }[]) {
-              const meta = entry?.metas?.[0];
-              if (meta && typeof meta.name === "string" && meta.equipped && typeof meta.equipped === "object") {
-                liveEquippedByName.set(meta.name.toLowerCase(), meta.equipped);
-              }
+            for (const entry of Object.values(msg.payload) as { metas?: LivePlayerMeta[] }[]) {
+              applyLiveMeta(entry?.metas?.[0]);
             }
           } else if (msg.event === "presence_diff" && msg.payload?.joins && typeof msg.payload.joins === "object") {
-            for (const entry of Object.values(msg.payload.joins) as { metas?: { name?: string; equipped?: Record<string, string> }[] }[]) {
-              const meta = entry?.metas?.[0];
-              if (meta && typeof meta.name === "string" && meta.equipped && typeof meta.equipped === "object") {
-                liveEquippedByName.set(meta.name.toLowerCase(), meta.equipped);
-              }
+            for (const entry of Object.values(msg.payload.joins) as { metas?: LivePlayerMeta[] }[]) {
+              applyLiveMeta(entry?.metas?.[0]);
             }
           }
         } catch { /* ignore */ }
@@ -130,12 +141,14 @@ export function createSync(initialPlayer: Player, onSync: (r: ServerState, pendi
     } catch { /* ignore */ }
   }
 
-  function sendCosmeticsBroadcast(name: string | null, equipped: Record<string, string>, force = false) {
+  function sendCosmeticsBroadcast(name: string | null, equipped: Record<string, string>, lifetime = 0, prestige = 0, force = false) {
     currentName = name;
     currentEquipped = equipped;
+    currentLifetime = lifetime;
+    currentPrestige = prestige;
     if (!name) return;
-    liveEquippedByName.set(name.toLowerCase(), equipped);
-    const serialized = JSON.stringify({ name, equipped });
+    applyLiveMeta({ name, equipped, lifetime, prestige });
+    const serialized = JSON.stringify({ name, equipped, lifetime: Math.floor(lifetime / 1000), prestige });
     if (!force && serialized === lastBroadcastPayload) return;
     lastBroadcastPayload = serialized;
     if (!ws || !wsReady || ws.readyState !== WebSocket.OPEN) return;
@@ -143,13 +156,13 @@ export function createSync(initialPlayer: Player, onSync: (r: ServerState, pendi
       ws.send(JSON.stringify({
         topic: "realtime:clawd-cosmetics",
         event: "presence",
-        payload: { event: "track", payload: { name, equipped } },
+        payload: { event: "track", payload: { name, equipped, lifetime, prestige } },
         ref: String(Date.now()),
       }));
       ws.send(JSON.stringify({
         topic: "realtime:clawd-cosmetics",
         event: "broadcast",
-        payload: { type: "broadcast", event: "cosmetics_update", payload: { name, equipped } },
+        payload: { type: "broadcast", event: "cosmetics_update", payload: { name, equipped, lifetime, prestige } },
         ref: String(Date.now() + 1),
       }));
     } catch { /* ignore */ }
@@ -165,10 +178,19 @@ export function createSync(initialPlayer: Player, onSync: (r: ServerState, pendi
   }, 25000);
 
   function mergeRankRows(rows: RankRow[]): RankRow[] {
-    return rows.map(r => {
-      const live = r.name ? liveEquippedByName.get(r.name.toLowerCase()) : undefined;
-      return live ? { ...r, equipped: { ...r.equipped, ...live } } : r;
+    const merged = rows.map(r => {
+      const live = r.name ? livePlayerByName.get(r.name.toLowerCase()) : undefined;
+      if (!live) return r;
+      return {
+        ...r,
+        lifetime: Math.max(r.lifetime, live.lifetime ?? 0),
+        prestige: Math.max(r.prestige, live.prestige ?? 0),
+        equipped: live.equipped ? { ...r.equipped, ...live.equipped } : r.equipped,
+      };
     });
+    merged.sort((a, b) => b.lifetime - a.lifetime);
+    merged.forEach((r, idx) => { r.rank = idx + 1; });
+    return merged;
   }
 
   async function flush() {
@@ -207,7 +229,8 @@ export function createSync(initialPlayer: Player, onSync: (r: ServerState, pendi
     getPlayer: () => p,
     setPlayer(newP: Player) { p = newP; queue = ""; },
     setName: (name: string) => rpc<void>("aura_set_name", { p_id: p.id, p_secret: p.secret, p_name: name }),
-    broadcastCosmetics: (name: string | null, equipped: Record<string, string>) => sendCosmeticsBroadcast(name, equipped),
+    broadcastCosmetics: (name: string | null, equipped: Record<string, string>, lifetime = 0, prestige = 0) =>
+      sendCosmeticsBroadcast(name, equipped, lifetime, prestige),
     top: async () => mergeRankRows(await rpc<RankRow[]>("aura_top", { p_limit: 50 })),
     around: async () => mergeRankRows(await rpc<RankRow[]>("aura_around", { p_id: p.id, p_secret: p.secret })),
   };
