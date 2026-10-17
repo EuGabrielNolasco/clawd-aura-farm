@@ -14,6 +14,7 @@
 <link rel="apple-touch-icon" href="/favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;700&family=VT323&display=swap">
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 
 <body>
@@ -186,7 +187,7 @@
       <button id="menu-close" type="button" aria-label="Fechar">✕</button>
     </div>
 
-    <!-- Painel: Conta, Sincronização Externa (Google, Facebook, Apple ID, Número) e Backup -->
+    <!-- Painel: Conta & Autenticação Google OAuth 2.0 -->
     <section class="panel" data-panel="account" role="tabpanel">
       <div class="account-card">
         <div class="acc-avatar" id="acc-avatar"></div>
@@ -194,52 +195,35 @@
           <h3 id="acc-name">Jogador Anônimo</h3>
           <p id="acc-status" class="acc-badge">🟢 Conectado na Nuvem</p>
           <p id="acc-linked-badge" class="acc-linked-badge" hidden></p>
-          <p class="acc-meta"><small id="acc-id-short">Conta Ativa</small> · <small id="acc-rank-label">Sem ranking</small></p>
+          <p class="acc-meta"><small id="acc-id-short">Conta Principal Preservada</small> · <small id="acc-rank-label">Sem ranking</small></p>
         </div>
       </div>
 
       <div class="acc-box highlight">
-        <h4>🔐 Sincronizar e Confirmar Conta (Google, Facebook, Apple ID ou Número)</h4>
-        <p class="acc-desc">Salve sua conta atual vinculando ao seu Google, Facebook, Apple ID ou Número com código de confirmação de 6 dígitos (<b>sem criar chave nova e sem perder sua conta</b>):</p>
+        <h4>🔐 Entrar / Sincronizar com Google OAuth 2.0</h4>
+        <p class="acc-desc">Conecte sua conta diretamente com o login oficial do Google (sem precisar de código, sem criar chave nova e sem perder sua conta):</p>
 
-        <div class="social-grid" role="group" aria-label="Escolha onde sincronizar">
-          <button type="button" class="social-btn active" data-provider="google">
-            <span class="social-icon google-ic">G</span>
-            <span>Google</span>
+        <div class="google-oauth-wrap">
+          <div id="google-gsi-btn" class="google-gsi-btn"></div>
+          <button type="button" id="google-oauth-btn" class="btn-google-oauth">
+            <span class="google-g-logo">G</span>
+            <span>Continuar com o Google</span>
           </button>
-          <button type="button" class="social-btn" data-provider="facebook">
-            <span class="social-icon fb-ic">f</span>
-            <span>Facebook</span>
-          </button>
-          <button type="button" class="social-btn" data-provider="apple">
-            <span class="social-icon apple-ic"></span>
-            <span>Apple ID</span>
-          </button>
-          <button type="button" class="social-btn" data-provider="phone">
-            <span class="social-icon phone-ic">📱</span>
-            <span>Número</span>
-          </button>
+          <button type="button" id="google-signout-btn" class="btn-secondary" hidden>Sair da conta Google</button>
         </div>
 
-        <form id="social-sync-form" class="acc-form social-form">
-          <label for="social-id-input" id="social-id-label">E-mail da conta Google (Gmail)</label>
-          <div class="name-row">
-            <input id="social-id-input" type="email" placeholder="seuemail@gmail.com" autocomplete="username" required>
-            <button type="button" id="send-code-btn" class="btn-accent">📩 Enviar Código</button>
-          </div>
+        <p class="name-msg" id="google-oauth-msg" role="status"></p>
 
-          <div id="otp-step-box" class="otp-step-box" hidden>
-            <div id="otp-delivery-banner" class="otp-delivery-banner" role="alert"></div>
-            <button type="button" id="whatsapp-code-btn" class="btn-whatsapp" hidden>💬 Receber Código no WhatsApp</button>
-            <label for="social-code-input">Digite o código de 6 dígitos enviado para confirmar:</label>
+        <details class="google-api-details" id="google-api-details">
+          <summary>⚙️ Configurar API do Google (OAuth 2.0 Client ID)</summary>
+          <form id="google-client-id-form" class="acc-form">
+            <p class="acc-desc"><small>Cole aqui o seu <b>Client ID</b> do Google Cloud Console (terminado em <code>.apps.googleusercontent.com</code>) com a origem <code>https://eugabrielnolasco.github.io</code> autorizada:</small></p>
             <div class="name-row">
-              <input id="social-code-input" type="text" inputmode="numeric" maxlength="6" pattern="\d{6}" placeholder="000000" autocomplete="one-time-code">
-              <button type="submit" id="verify-code-btn" class="btn-accent">✅ Confirmar Código</button>
+              <input id="google-client-id-input" type="text" placeholder="123456789-abc...apps.googleusercontent.com" autocomplete="off">
+              <button type="submit" class="btn-accent">Salvar API</button>
             </div>
-          </div>
-
-          <p class="name-msg" id="social-sync-msg" role="status"></p>
-        </form>
+          </form>
+        </details>
       </div>
 
       <div class="acc-box">

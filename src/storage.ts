@@ -195,86 +195,89 @@ export function saveMuted(muted: boolean) {
   try { localStorage.setItem(MUTE_KEY, muted ? "1" : "0"); } catch { /* ignora */ }
 }
 
-export type AuthProvider = "google" | "facebook" | "apple" | "phone";
-
-export interface LinkedAccount {
-  provider: AuthProvider;
-  identifier: string;
-  verified: boolean;
+export interface GoogleProfile {
+  sub: string;
+  email: string;
+  name?: string;
+  picture?: string;
   linkedAt: number;
   playerId: string;
 }
 
-const LINKED_ACCOUNT_KEY = "clawd-aura-farm:linked-account-v2";
-const EXTERNAL_VAULT_PREFIX = "clawd-aura-farm:ext-vault:";
+const GOOGLE_ACCOUNT_KEY = "clawd-aura-farm:google-oauth-v1";
+const GOOGLE_CLIENT_ID_KEY = "clawd-aura-farm:google-client-id";
+const GOOGLE_VAULT_PREFIX = "clawd-aura-farm:google-vault:";
 
-export const PROVIDER_LABELS: Record<AuthProvider, string> = {
-  google: "Google",
-  facebook: "Facebook",
-  apple: "Apple ID",
-  phone: "Número de Celular",
-};
-
-/** Normaliza e valida o identificador (e-mail para Google/Facebook/Apple ou dígitos para celular). */
-export function normalizeIdentifier(provider: AuthProvider, raw: string): string | null {
-  const trimmed = raw.trim();
-  if (!trimmed) return null;
-  if (provider === "phone") {
-    const digits = trimmed.replace(/\D/g, "");
-    if (digits.length < 10 || digits.length > 15) return null;
-    return digits.length <= 11 && !digits.startsWith("55") ? `55${digits}` : digits;
-  }
-  const lower = trimmed.toLowerCase();
-  if (provider === "google" || provider === "apple") {
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(lower)) return null;
-    return lower;
-  }
-  // facebook aceita e-mail ou nome de usuário (mín. 3 caracteres)
-  if (lower.length < 3) return null;
-  return lower;
-}
-
-/** Gera um código numérico de 6 dígitos para confirmação da conta. */
-export function generateConfirmationCode(): string {
-  const arr = new Uint32Array(1);
-  crypto.getRandomValues(arr);
-  const n = 100000 + (arr[0] % 900000);
-  return String(n);
-}
-
-export function loadLinkedAccount(): LinkedAccount | null {
+/** Retorna o Client ID do Google OAuth 2.0 configurado via variável de ambiente ou salvo localmente. */
+export function getGoogleClientId(): string {
   try {
-    const raw = localStorage.getItem(LINKED_ACCOUNT_KEY);
+    const envId = (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_GOOGLE_CLIENT_ID?.trim();
+    if (envId) return envId;
+    return (localStorage.getItem(GOOGLE_CLIENT_ID_KEY) || "").trim();
+  } catch {
+    return "";
+  }
+}
+
+export function saveGoogleClientId(clientId: string) {
+  try {
+    localStorage.setItem(GOOGLE_CLIENT_ID_KEY, clientId.trim());
+  } catch { /* ignore */ }
+}
+
+/** Decodifica o token JWT (credential) retornado pelo Google OAuth 2.0 (Google Identity Services). */
+export function parseGoogleJwt(credential: string): { sub: string; email: string; name?: string; picture?: string } | null {
+  try {
+    const parts = credential.split(".");
+    if (parts.length !== 3) return null;
+    let b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    while (b64.length % 4 !== 0) b64 += "=";
+    const binary = atob(b64);
+    const bytes = Uint8Array.from(binary, c => c.charCodeAt(0));
+    const json = new TextDecoder().decode(bytes);
+    const payload = JSON.parse(json);
+    if (!payload || typeof payload.sub !== "string" || typeof payload.email !== "string") return null;
+    return {
+      sub: payload.sub,
+      email: payload.email.toLowerCase(),
+      name: typeof payload.name === "string" ? payload.name : undefined,
+      picture: typeof payload.picture === "string" ? payload.picture : undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function loadGoogleAccount(): GoogleProfile | null {
+  try {
+    const raw = localStorage.getItem(GOOGLE_ACCOUNT_KEY);
     if (!raw) return null;
     const data = JSON.parse(raw);
-    if (
-      data &&
-      typeof data === "object" &&
-      (data.provider === "google" || data.provider === "facebook" || data.provider === "apple" || data.provider === "phone") &&
-      typeof data.identifier === "string" &&
-      data.verified === true
-    ) {
-      return data as LinkedAccount;
+    if (data && typeof data === "object" && typeof data.email === "string" && typeof data.sub === "string") {
+      return data as GoogleProfile;
     }
   } catch { /* ignore */ }
   return null;
 }
 
-export function saveLinkedAccount(acc: LinkedAccount) {
+export function saveGoogleAccount(profile: GoogleProfile) {
   try {
-    localStorage.setItem(LINKED_ACCOUNT_KEY, JSON.stringify(acc));
+    localStorage.setItem(GOOGLE_ACCOUNT_KEY, JSON.stringify(profile));
   } catch { /* ignore */ }
 }
 
-/**
- * Salva a conta atual (sem alterar a chave/ID da conta) vinculada ao provedor externo confirmado.
- */
-export function saveExternalAccountVault(provider: AuthProvider, identifier: string, p: Player, s: State) {
-  const norm = normalizeIdentifier(provider, identifier);
+export function clearGoogleAccount() {
+  try {
+    localStorage.removeItem(GOOGLE_ACCOUNT_KEY);
+  } catch { /* ignore */ }
+}
+
+/** Salva a conta atual vinculada ao e-mail do Google OAuth 2.0 (sem alterar a chave da conta). */
+export function saveGoogleAccountVault(email: string, p: Player, s: State) {
+  const norm = email.trim().toLowerCase();
   if (!norm) return;
   try {
-    const key = `${EXTERNAL_VAULT_PREFIX}${provider}:${norm}`;
-    localStorage.setItem(key, JSON.stringify({
+    localStorage.setItem(`${GOOGLE_VAULT_PREFIX}${norm}`, JSON.stringify({
       player: p,
       state: { ...s, savedAt: Date.now() },
       updatedAt: Date.now(),
@@ -282,16 +285,12 @@ export function saveExternalAccountVault(provider: AuthProvider, identifier: str
   } catch { /* ignore */ }
 }
 
-/**
- * Busca uma conta previamente salva neste navegador para o provedor/identificador confirmado,
- * sem gerar uma chave nova.
- */
-export function loadExternalAccountVault(provider: AuthProvider, identifier: string): { player: Player; state: State } | null {
-  const norm = normalizeIdentifier(provider, identifier);
+/** Carrega a conta salva para o e-mail autenticado via Google OAuth 2.0 (sem criar chave nova). */
+export function loadGoogleAccountVault(email: string): { player: Player; state: State } | null {
+  const norm = email.trim().toLowerCase();
   if (!norm) return null;
   try {
-    const key = `${EXTERNAL_VAULT_PREFIX}${provider}:${norm}`;
-    const raw = localStorage.getItem(key);
+    const raw = localStorage.getItem(`${GOOGLE_VAULT_PREFIX}${norm}`);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     const res = importSaveJson(JSON.stringify(parsed));
@@ -299,5 +298,6 @@ export function loadExternalAccountVault(provider: AuthProvider, identifier: str
   } catch { /* ignore */ }
   return null;
 }
+
 
 

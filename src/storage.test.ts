@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   exportAccountToken, parseAccountToken, exportSaveJson, importSaveJson,
-  generateConfirmationCode, normalizeIdentifier, sanitize, type Player
+  parseGoogleJwt, sanitize, type Player
 } from "./storage";
 import { newState } from "./game";
 
@@ -70,13 +70,20 @@ describe("storage e sincronização de contas", () => {
     expect(clean.upgrades.aux).toBe(40);
   });
 
-  it("gera código de confirmação de 6 dígitos e valida Google, Facebook, Apple ID e Número", () => {
-    const code = generateConfirmationCode();
-    expect(code).toMatch(/^\d{6}$/);
-    expect(normalizeIdentifier("google", "DiogoGamer1704@gmail.com")).toBe("diogogamer1704@gmail.com");
-    expect(normalizeIdentifier("apple", "user@icloud.com")).toBe("user@icloud.com");
-    expect(normalizeIdentifier("facebook", "diogo.nolasco")).toBe("diogo.nolasco");
-    expect(normalizeIdentifier("phone", "(11) 99888-7766")).toBe("5511998887766");
-    expect(normalizeIdentifier("phone", "123")).toBeNull();
+  it("decodifica payload JWT do Google OAuth 2.0", () => {
+    const payload = btoa(JSON.stringify({
+      sub: "10987654321",
+      email: "DiogoGamer1704@gmail.com",
+      name: "Diogo Nolasco",
+    }));
+    const fakeJwt = `eyJhbGciOiJSUzI1NiJ9.${payload}.assinatura`;
+    const parsed = parseGoogleJwt(fakeJwt);
+    expect(parsed).toEqual({
+      sub: "10987654321",
+      email: "diogogamer1704@gmail.com",
+      name: "Diogo Nolasco",
+      picture: undefined,
+    });
+    expect(parseGoogleJwt("invalido")).toBeNull();
   });
 });
