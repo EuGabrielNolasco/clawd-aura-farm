@@ -16,7 +16,7 @@ function csp(supabaseUrl: string | undefined): Plugin {
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com",
     "font-src 'self' https://fonts.gstatic.com data:",
     "frame-src 'self' https://accounts.google.com https://apis.google.com https://*.google.com",
-    "img-src 'self' data: https://*.googleusercontent.com https://*.gstatic.com",
+    "img-src 'self' data: https://*.googleusercontent.com https://*.gstatic.com https://api.qrserver.com",
     `connect-src ${connect}`,
     "object-src 'none'",
     "base-uri 'self'",

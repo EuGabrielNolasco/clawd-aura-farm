@@ -101,6 +101,122 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const SECRET_RE = /^[0-9a-f]{32,128}$/i;
 
 /**
+ * Codifica a identidade do jogador junto com o progresso atual em um token seguro e compacto.
+ * Formato: AURA_SYNC_<base64url(JSON)>
+ */
+export function exportSyncPayload(p: Player, s: State): string {
+  const payload = {
+    p,
+    s: {
+      aura: Math.floor(s.aura),
+      total: Math.floor(s.total),
+      lifetime: Math.floor(s.lifetime),
+      prestige: s.prestige,
+      tokens: s.tokens,
+      upgrades: s.upgrades,
+      owned: s.owned,
+      equipped: s.equipped,
+      achievements: s.achievements,
+      clicks: s.clicks,
+      crits: s.crits,
+      goldens: s.goldens,
+      thieves: s.thieves,
+      streak: s.streak,
+    },
+  };
+  const json = JSON.stringify(payload);
+  const b64 = btoa(unescape(encodeURIComponent(json))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  return `AURA_SYNC_${b64}`;
+}
+
+/**
+ * Decodifica o payload de sincronização (com save incluído) ou token simples de conta.
+ */
+export function parseSyncPayload(input: string): { player: Player; state?: Partial<State> } | null {
+  if (!input || typeof input !== "string") return null;
+  let str = input.trim();
+  if (str.includes("sync=")) {
+    const m = str.match(/sync=([^&#\s]+)/);
+    if (m) str = decodeURIComponent(m[1]);
+  }
+  if (str.startsWith("AURA_SYNC_")) {
+    try {
+      let b64 = str.slice(10).replace(/-/g, "+").replace(/_/g, "/");
+      while (b64.length % 4 !== 0) b64 += "=";
+      const json = decodeURIComponent(escape(atob(b64)));
+      const obj = JSON.parse(json);
+      if (obj && obj.p && UUID_RE.test(obj.p.id) && SECRET_RE.test(obj.p.secret)) {
+        return {
+          player: { id: obj.p.id.toLowerCase(), secret: obj.p.secret.toLowerCase() },
+          state: obj.s ? sanitize(obj.s) : undefined,
+        };
+      }
+    } catch { /* ignora */ }
+  }
+  const p = parseAccountToken(str);
+  if (p) return { player: p };
+  return null;
+}
+
+/**
+ * Mescla de forma inteligente e segura o estado local com o estado remoto,
+ * mantendo o maior progresso em todas as métricas para nada ser perdido.
+ */
+export function mergeStates(local: State, remote: Partial<State>): State {
+  const merged = { ...local };
+  if (typeof remote.lifetime === "number" && remote.lifetime > local.lifetime) {
+    merged.lifetime = remote.lifetime;
+    merged.total = Math.max(local.total, remote.total ?? 0);
+    merged.aura = Math.max(local.aura, remote.aura ?? 0);
+  } else {
+    merged.total = Math.max(local.total, remote.total ?? 0);
+    merged.aura = Math.max(local.aura, remote.aura ?? 0);
+  }
+  merged.prestige = Math.max(local.prestige, remote.prestige ?? 0);
+  merged.tokens = Math.max(local.tokens, remote.tokens ?? 0);
+  merged.clicks = Math.max(local.clicks, remote.clicks ?? 0);
+  merged.crits = Math.max(local.crits, remote.crits ?? 0);
+  merged.goldens = Math.max(local.goldens, remote.goldens ?? 0);
+  merged.thieves = Math.max(local.thieves, remote.thieves ?? 0);
+  merged.streak = Math.max(local.streak, remote.streak ?? 0);
+
+  if (remote.upgrades) {
+    for (const u of UPGRADES) {
+      merged.upgrades[u.id] = Math.max(local.upgrades[u.id] ?? 0, (remote.upgrades as any)[u.id] ?? 0);
+    }
+  }
+  if (Array.isArray(remote.owned)) {
+    merged.owned = [...new Set([...local.owned, ...remote.owned])];
+  }
+  if (Array.isArray(remote.achievements)) {
+    merged.achievements = [...new Set([...local.achievements, ...remote.achievements])];
+  }
+  if (remote.equipped && typeof remote.equipped === "object") {
+    merged.equipped = { ...local.equipped, ...remote.equipped };
+  }
+  return sanitize(merged);
+}
+
+/**
+ * Deriva deterministicamente um par (id, secret) a partir do Google Sub.
+ * Garante que qualquer aparelho que logar com a mesma conta Google tenha a mesma identidade no Supabase.
+ */
+export async function derivePlayerFromGoogle(sub: string): Promise<Player> {
+  const enc = new TextEncoder();
+  const hashBuf = await crypto.subtle.digest("SHA-256", enc.encode(`clawd-aura-google:${sub.trim()}`));
+  const bytes = new Uint8Array(hashBuf);
+  // UUID v4 formatado a partir dos primeiros 16 bytes
+  bytes[6] = (bytes[6] & 0x0f) | 0x40; // versão 4
+  bytes[8] = (bytes[8] & 0x3f) | 0x80; // variante RFC
+  const hex = [...bytes].map(b => b.toString(16).padStart(2, "0")).join("");
+  const id = `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
+
+  const secretBuf = await crypto.subtle.digest("SHA-256", enc.encode(`clawd-aura-secret:${sub.trim()}:${id}`));
+  const secret = [...new Uint8Array(secretBuf)].map(b => b.toString(16).padStart(2, "0")).join("");
+  return { id, secret };
+}
+
+/**
  * Decodifica uma chave de conta. Aceita:
  * - Token no formato AURA_<base64> ou base64 direto
  * - URL completa contendo #sync= ou ?sync=
@@ -142,13 +258,14 @@ export function parseAccountToken(input: string): Player | null {
 }
 
 /** Gera a URL direta com a chave da conta no fragmento (#sync=...) para abrir no PC ou celular. */
-export function accountShareUrl(p: Player): string {
+export function accountShareUrl(p: Player, s?: State): string {
+  const token = s ? exportSyncPayload(p, s) : exportAccountToken(p);
   try {
     const origin = window.location.origin;
     const path = window.location.pathname;
-    return `${origin}${path}#sync=${exportAccountToken(p)}`;
+    return `${origin}${path}#sync=${token}`;
   } catch {
-    return `#sync=${exportAccountToken(p)}`;
+    return `#sync=${token}`;
   }
 }
 

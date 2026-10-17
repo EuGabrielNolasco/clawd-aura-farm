@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   exportAccountToken, parseAccountToken, exportSaveJson, importSaveJson,
-  parseGoogleJwt, sanitize, type Player
+  parseGoogleJwt, sanitize, type Player, exportSyncPayload, parseSyncPayload,
+  mergeStates, derivePlayerFromGoogle
 } from "./storage";
 import { newState } from "./game";
 
@@ -85,5 +86,57 @@ describe("storage e sincronização de contas", () => {
       picture: undefined,
     });
     expect(parseGoogleJwt("invalido")).toBeNull();
+  });
+
+  it("exporta e decodifica payload de sincronização com progresso completo (PC ⇄ Celular)", () => {
+    const s = newState();
+    s.aura = 141_223_625_618;
+    s.total = 141_223_625_618;
+    s.lifetime = 141_223_625_618;
+    s.prestige = 3;
+    s.upgrades.aux = 40;
+    s.upgrades.click = 30;
+
+    const token = exportSyncPayload(samplePlayer, s);
+    expect(token).toMatch(/^AURA_SYNC_/);
+
+    const parsed = parseSyncPayload(token);
+    expect(parsed).not.toBeNull();
+    expect(parsed!.player).toEqual(samplePlayer);
+    expect(parsed!.state?.aura).toBe(141_223_625_618);
+    expect(parsed!.state?.prestige).toBe(3);
+    expect(parsed!.state?.upgrades?.aux).toBe(40);
+  });
+
+  it("mescla estados priorizando o maior progresso de cada aparelho", () => {
+    const local = newState();
+    local.aura = 121_273_357; // celular antigo
+    local.lifetime = 121_273_357;
+    local.tokens = 505; // celular tem fichas da roleta
+    local.prestige = 3;
+
+    const pcState = newState();
+    pcState.aura = 141_223_625_618; // PC com muito mais aura
+    pcState.lifetime = 141_223_625_618;
+    pcState.tokens = 0;
+    pcState.prestige = 3;
+    pcState.upgrades.aux = 40;
+
+    const merged = mergeStates(local, pcState);
+    expect(merged.aura).toBe(141_223_625_618);
+    expect(merged.lifetime).toBe(141_223_625_618);
+    expect(merged.tokens).toBe(505); // preserva as fichas
+    expect(merged.upgrades.aux).toBe(40); // preserva a loja no máximo
+  });
+
+  it("deriva par (id, secret) determinístico a partir do Google sub", async () => {
+    const p1 = await derivePlayerFromGoogle("104829104810294819204");
+    const p2 = await derivePlayerFromGoogle("104829104810294819204");
+
+    // Mesmo Google sub em aparelhos diferentes deve gerar exatamente o mesmo id e secret
+    expect(p1.id).toBe(p2.id);
+    expect(p1.secret).toBe(p2.secret);
+    expect(p1.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+    expect(p1.secret.length).toBe(64);
   });
 });

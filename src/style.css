@@ -963,6 +963,44 @@ button:focus-visible { outline: 3px solid var(--ink); outline-offset: 4px; }
   color: #4ade80;
 }
 
+.sync-card-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: .6rem;
+  margin-top: .4rem;
+}
+.sync-actions-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .4rem;
+}
+.qr-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: .5rem;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  padding: .8rem;
+  margin-top: .4rem;
+}
+.qr-img-wrap img {
+  border-radius: 6px;
+  background: #ffffff;
+  padding: 8px;
+  width: 180px;
+  height: 180px;
+  display: block;
+}
+.qr-tip {
+  font-size: .82rem;
+  color: #f3ecff;
+  text-align: center;
+  margin: 0;
+  font-weight: 500;
+}
+
 .google-oauth-wrap {
   display: flex;
   flex-direction: column;

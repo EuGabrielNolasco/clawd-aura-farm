@@ -11,10 +11,11 @@ import { clawdSvg } from "./mini";
 import { createSync, onlineEnabled, toState, type RankRow, type ServerState } from "./online";
 import { sfx, setMuted } from "./sound";
 import {
-  clearGoogleAccount, exportAccountToken, exportSaveJson, getGoogleClientId,
-  importSaveJson, load, loadGoogleAccount, loadGoogleAccountVault, loadMuted,
-  parseAccountToken, player, sanitize, save, saveGoogleAccount, saveGoogleAccountVault,
-  saveMuted, savePlayer, type Player,
+  accountShareUrl, clearGoogleAccount, derivePlayerFromGoogle, exportAccountToken,
+  exportSaveJson, getGoogleClientId, importSaveJson, load, loadGoogleAccount,
+  loadGoogleAccountVault, loadMuted, mergeStates, parseSyncPayload, player,
+  sanitize, save, saveGoogleAccount, saveGoogleAccountVault, saveMuted, savePlayer,
+  type Player,
 } from "./storage";
 import {
   addSpin, applySpinPrize, getWheelTokensWon, loadSpins, PRIZES, recordMissionProgress,
@@ -29,14 +30,19 @@ let state: State = saved.state;
 let level = -1;
 let activePlayer: Player = player();
 
-// Sincronização direta de conta via link (#sync=AURA_...)
+// Sincronização direta de conta e progresso via link ou QR Code (#sync=...)
 try {
-  if (window.location.hash.includes("sync=")) {
-    const fromHash = parseAccountToken(window.location.hash);
-    if (fromHash) {
-      activePlayer = fromHash;
+  const syncSource = window.location.hash || window.location.search;
+  if (syncSource.includes("sync=")) {
+    const syncRes = parseSyncPayload(syncSource);
+    if (syncRes) {
+      activePlayer = syncRes.player;
       savePlayer(activePlayer);
-      history.replaceState(null, "", window.location.pathname + window.location.search);
+      if (syncRes.state) {
+        state = mergeStates(state, syncRes.state);
+        save(state);
+      }
+      history.replaceState(null, "", window.location.pathname);
     }
   }
 } catch { /* ignore */ }
@@ -1112,42 +1118,50 @@ async function completeGoogleSignIn(info: { sub: string; email: string; name?: s
   const normEmail = info.email.trim().toLowerCase();
   const displayName = info.name?.trim() || null;
 
-  // 1. Unificação na nuvem (Supabase RPC aura_google_auth): sincroniza PC ⇄ Celular
+  // 1. Deriva par (id, secret) determinístico para esta conta Google (garante mesmo ID no PC e celular mesmo sem RPC)
+  const googlePlayer = await derivePlayerFromGoogle(info.sub);
+  let adoptedPlayer = activePlayer;
+
   if (sync) {
     try {
       const authRes = await sync.googleAuth(activePlayer, normEmail, info.sub, displayName);
-      if (authRes && authRes.id && authRes.id !== activePlayer.id) {
-        // Encontrou a conta principal desse Google criada no outro dispositivo (ex: PC com 22,4 tri)
-        activePlayer = { id: authRes.id, secret: authRes.secret || activePlayer.secret };
-        savePlayer(activePlayer);
-        sync.setPlayer(activePlayer);
-        const srv = await sync.fetchState();
-        if (srv) {
-          state = toState(srv);
-          state.upgrades.cosmic = Math.max(state.upgrades.cosmic, localExt.cosmic);
-          save(state);
-        }
+      if (authRes && authRes.id) {
+        adoptedPlayer = { id: authRes.id, secret: authRes.secret || activePlayer.secret };
       }
     } catch {
-      // Fallback local se a RPC da nuvem ainda não estiver disponível
-      const vault = loadGoogleAccountVault(normEmail);
-      if (vault && vault.state.lifetime > state.lifetime) {
-        activePlayer = vault.player;
-        state = vault.state;
-        savePlayer(activePlayer);
-        save(state);
-        sync.setPlayer(activePlayer);
-        void sync.flush();
-      }
+      // Fallback: unificação determinística via Google sub
+      adoptedPlayer = googlePlayer;
     }
   } else {
+    adoptedPlayer = googlePlayer;
+  }
+
+  // 2. Se o ID da conta mudou (ex: adotou a conta unificada do Google):
+  if (adoptedPlayer.id !== activePlayer.id) {
+    activePlayer = adoptedPlayer;
+    savePlayer(activePlayer);
+    sync?.setPlayer(activePlayer);
+    try {
+      const srv = await sync?.fetchState();
+      if (srv) {
+        state = mergeStates(state, toState(srv));
+        state.upgrades.cosmic = Math.max(state.upgrades.cosmic, localExt.cosmic);
+        save(state);
+      }
+    } catch { /* ignore */ }
+  } else {
+    // Mescla com cofre local caso exista progresso maior registrado
     const vault = loadGoogleAccountVault(normEmail);
-    if (vault && vault.state.lifetime > state.lifetime) {
-      activePlayer = vault.player;
-      state = vault.state;
-      savePlayer(activePlayer);
+    if (vault) {
+      state = mergeStates(state, vault.state);
       save(state);
     }
+  }
+
+  // 3. Sincroniza o perfil atualizado na nuvem
+  if (sync) {
+    void sync.syncProfile(state.lifetime, state.prestige, state.total, state.aura);
+    void sync.flush();
   }
 
   // 2. Se o usuário ainda não tem apelido no jogo e o Google tem nome, define automaticamente
@@ -1312,6 +1326,33 @@ $<HTMLInputElement>("input-import-json")?.addEventListener("change", async e => 
   }
 });
 
+$("btn-qr-sync")?.addEventListener("click", () => {
+  const qrBox = $("qr-modal-box");
+  const imgWrap = $("qr-img-wrap");
+  if (!qrBox || !imgWrap) return;
+  const url = accountShareUrl(activePlayer, state);
+  imgWrap.innerHTML = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(url)}" alt="QR Code de Sincronização">`;
+  qrBox.hidden = !qrBox.hidden;
+  if (!qrBox.hidden) {
+    toast("📷 Aponte a câmera do celular para o QR Code para carregar o jogo!");
+    const msg = $("token-sync-msg");
+    if (msg) msg.textContent = "📷 Aponte a câmera do celular para este QR Code para sincronizar!";
+  }
+});
+
+$("btn-copy-sync-link")?.addEventListener("click", async () => {
+  const url = accountShareUrl(activePlayer, state);
+  try {
+    await navigator.clipboard.writeText(url);
+    toast("📋 Link com save copiado! Abra no celular para carregar o jogo.");
+    const msg = $("token-sync-msg");
+    if (msg) msg.textContent = "✅ Link de sincronização copiado! Abra no celular.";
+    sfx.copy();
+  } catch {
+    prompt("Copie o link abaixo e abra no navegador do seu celular:", url);
+  }
+});
+
 $("btn-copy-token")?.addEventListener("click", async () => {
   const token = exportAccountToken(activePlayer);
   try {
@@ -1326,32 +1367,32 @@ $("btn-copy-token")?.addEventListener("click", async () => {
 });
 
 $("btn-paste-token")?.addEventListener("click", async () => {
-  const input = prompt("Cole a Chave da Conta (AURA_... ou URL com #sync=):");
+  const input = prompt("Cole a Chave da Conta ou Link com #sync=:");
   if (!input) return;
-  const parsed = parseAccountToken(input);
+  const parsed = parseSyncPayload(input);
   if (!parsed) {
-    toast("❌ Chave inválida.");
+    toast("❌ Chave ou link inválido.");
     const msg = $("token-sync-msg");
     if (msg) msg.textContent = "❌ Chave inválida. Verifique o código digitado.";
     return;
   }
-  if (parsed.id === activePlayer.id) {
-    toast("Essa chave já é a conta ativa neste aparelho.");
-    return;
-  }
-  if (!confirm("Sincronizar esta conta? O progresso da nuvem será carregado neste aparelho.")) return;
-  activePlayer = parsed;
+  activePlayer = parsed.player;
   savePlayer(activePlayer);
+  if (parsed.state) {
+    state = mergeStates(state, parsed.state);
+    save(state);
+  }
   if (sync) {
     sync.setPlayer(activePlayer);
     try {
       const srv = await sync.fetchState();
       if (srv) {
-        state = toState(srv);
+        state = mergeStates(state, toState(srv));
         state.upgrades.cosmic = Math.max(state.upgrades.cosmic, localExt.cosmic);
         save(state);
       }
     } catch { /* ignore */ }
+    void sync.syncProfile(state.lifetime, state.prestige, state.total, state.aura);
     void sync.flush();
   }
   sfx.welcome();

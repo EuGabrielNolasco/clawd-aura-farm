@@ -232,12 +232,20 @@
         <p class="name-msg" id="google-oauth-msg" role="status"></p>
       </div>
 
-      <div class="acc-box">
-        <h4>🔗 Transferência Direta de Conta (PC ⇄ Celular)</h4>
-        <p class="acc-desc">Transfira ou conecte sua mesma conta instantaneamente em outro aparelho sem precisar de login:</p>
-        <div class="acc-backup-row">
-          <button type="button" id="btn-copy-token" class="btn-secondary">📋 Copiar Chave da Conta</button>
-          <button type="button" id="btn-paste-token" class="btn-secondary">📥 Conectar por Chave</button>
+      <div class="acc-box highlight">
+        <h4>📲 Sincronização Instantânea (PC ⇄ Celular)</h4>
+        <p class="acc-desc">Passe o jogo com todo o seu progresso atualizado (aura, nível e loja) direto para o seu celular em 1 segundo:</p>
+        <div class="sync-card-wrap">
+          <div class="sync-actions-row">
+            <button type="button" id="btn-qr-sync" class="btn-primary">📷 Ver QR Code para Celular</button>
+            <button type="button" id="btn-copy-sync-link" class="btn-secondary">🔗 Copiar Link com Save</button>
+            <button type="button" id="btn-copy-token" class="btn-secondary">📋 Copiar Chave</button>
+            <button type="button" id="btn-paste-token" class="btn-secondary">📥 Conectar por Chave/Link</button>
+          </div>
+          <div id="qr-modal-box" class="qr-box" hidden>
+            <div id="qr-img-wrap" class="qr-img-wrap"></div>
+            <p class="qr-tip">Aponte a câmera do seu celular para este QR Code para carregar seu jogo na mesma hora!</p>
+          </div>
         </div>
         <p class="name-msg" id="token-sync-msg" role="status"></p>
       </div>
