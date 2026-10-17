@@ -790,6 +790,55 @@ button:focus-visible { outline: 3px solid var(--ink); outline-offset: 4px; }
   font-size: 1.1rem;
 }
 .wheel-tip { text-align: center; color: var(--muted); margin-top: .4rem; }
+.wheel-extra-box {
+  margin-top: 1rem;
+  padding-top: .8rem;
+  border-top: 1px solid color-mix(in srgb, var(--violet) 30%, transparent);
+}
+.wheel-extra-box h4 {
+  margin: 0 0 .5rem;
+  font-size: .95rem;
+  color: var(--aura);
+}
+.wheel-prizes-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: .45rem;
+}
+.wheel-prize-chip {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  padding: .45rem .6rem;
+  border-radius: 8px;
+  border: 1.5px solid var(--violet);
+  background: color-mix(in srgb, var(--violet) 14%, transparent);
+  box-sizing: border-box;
+  min-width: 0;
+}
+.wheel-prize-chip .wp-icon {
+  font-size: 1.35rem;
+  flex: none;
+}
+.wheel-prize-chip div {
+  min-width: 0;
+  flex: 1;
+}
+.wheel-prize-chip b {
+  display: block;
+  font-size: .88rem;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wheel-prize-chip small {
+  display: block;
+  font-family: var(--mono);
+  font-size: .86rem;
+  color: var(--muted);
+  line-height: 1.15;
+}
 
 /* ===== Barra de Progresso nas Conquistas ===== */
 .ach-prog {

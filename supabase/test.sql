@@ -108,7 +108,7 @@ do $$ declare r jsonb; v_tokens int; begin
   v_tokens := (pg_temp.sync(1)->>'tokens')::int;
   update public.aura_players set thief_at = now() - interval '2 seconds' where id = pg_temp.pid(1);
   r := pg_temp.sync(1, 't');
-  assert (r->>'thieves')::int = 1 and (r->>'tokens')::int >= v_tokens + 3, 'ladrão não rendeu fichas: ' || r::text;
+  assert (r->>'thieves')::int = 1 and (r->>'tokens')::int = v_tokens, 'ladrão errado: ' || r::text;
 end $$;
 
 -- ===== login diário =====
@@ -117,7 +117,7 @@ do $$ declare r jsonb; begin
   assert (r->>'daily')::int = 0, 'login diário dado duas vezes no mesmo dia: ' || r::text;
   update public.aura_players set last_day = last_day - 1, streak = 1 where id = pg_temp.pid(1);
   r := pg_temp.sync(1);
-  assert (r->>'daily')::int = 10 and (r->>'streak')::int = 2, 'sequência de dias errada: ' || r::text;
+  assert (r->>'daily')::int = 1 and (r->>'streak')::int = 2, 'sequência de dias errada: ' || r::text;
   update public.aura_players set last_day = last_day - 3 where id = pg_temp.pid(1);
   r := pg_temp.sync(1);
   assert (r->>'streak')::int = 1, 'sequência não zerou depois de pular dias: ' || r::text;

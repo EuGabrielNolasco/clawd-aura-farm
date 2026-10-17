@@ -114,13 +114,14 @@ describe("Cérebro Dourado e ladrão", () => {
     expect(s.total).toBeCloseTo(50 * 2 * BUFF_MULT + 50 * 2);
   });
 
-  it("ladrão só aparece a partir do Coop Thief e rende fichas", () => {
+  it("ladrão só aparece a partir do Coop Thief e conta para conquistas sem dar fichas diretas", () => {
     const s = newState(), now = 1000;
     s.thiefAt = now - 2;
     expect(catchThief(s, now)).toBe(false);
     earn(s, 3.9e8);
     expect(catchThief(s, now)).toBe(true);
-    expect(s.tokens).toBe(3);
+    expect(s.thieves).toBe(1);
+    expect(s.tokens).toBe(0);
   });
 
   it("reagenda o que passou sem ser pego", () => {
@@ -135,14 +136,15 @@ describe("Cérebro Dourado e ladrão", () => {
 });
 
 describe("login diário, conquistas e prestígio", () => {
-  it("sequência de dias e recompensa", () => {
+  it("sequência de dias e recompensa de giro diário (sem dar fichas no login)", () => {
     const s = newState();
-    expect(daily(s, "2026-10-01")).toBe(5);
+    expect(daily(s, "2026-10-01")).toBe(1);
     expect(daily(s, "2026-10-01")).toBe(0);
-    expect(daily(s, "2026-10-02")).toBe(10);
+    expect(daily(s, "2026-10-02")).toBe(1);
     expect(s.streak).toBe(2);
-    expect(daily(s, "2026-10-05")).toBe(5);
+    expect(daily(s, "2026-10-05")).toBe(1);
     expect(s.streak).toBe(1);
+    expect(s.tokens).toBe(0);
   });
 
   it("conquista é concedida uma vez só", () => {

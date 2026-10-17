@@ -167,12 +167,11 @@ begin
     p.ups := array[p.ups[1], p.ups[2], p.ups[3], p.ups[4], p.ups[5], 0, 0, p.ups[6]];
   end if;
 
-  -- login diário (horário de Brasília): 5 fichas × dias seguidos, até 7
+  -- login diário (horário de Brasília): +1 giro na Roleta (sem dar Fichas 67 no login)
   if p.last_day is distinct from v_today then
     p.streak := case when p.last_day = v_today - 1 then p.streak + 1 else 1 end;
     p.last_day := v_today;
-    v_daily := 5 * least(p.streak, 7);
-    p.tokens := p.tokens + v_daily;
+    v_daily := 1;
   end if;
 
   -- aura passiva pelo relógio do servidor, dividindo o período nas mudanças de nível e no fim do buff
@@ -249,7 +248,7 @@ begin
     elsif v_ev = 't' then
       continue when public.aura_level(p.total) < 8
         or not (v_now between p.thief_at and p.thief_at + interval '12 seconds');
-      p.tokens := p.tokens + 3;
+      p.tokens := p.tokens + 0;
       p.thieves := p.thieves + 1;
       p.thief_at := v_now + make_interval(secs => 240 + random() * 360);
 

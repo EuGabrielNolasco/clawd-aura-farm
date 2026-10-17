@@ -39,7 +39,7 @@ export const comboFor = (clicksPerSecond: number) => 1 + 2 * Math.min(Math.max((
  * segundos depois do fim da janela visível, para cobrir o atraso do lote de eventos.
  */
 export const GOLDEN = { min: 180, max: 480, show: 13, slack: 4 } as const;
-export const THIEF = { min: 240, max: 600, show: 8, slack: 4, tokens: 3 } as const;
+export const THIEF = { min: 240, max: 600, show: 8, slack: 4, tokens: 0 } as const;
 /** Modo Mega Brain, ativado pelo Cérebro Dourado. */
 export const BUFF_S = 67;
 export const BUFF_MULT = 7;
@@ -282,14 +282,12 @@ export const todayBR = (date = new Date()) =>
 
 const dayDiff = (a: string, b: string) => Math.round((Date.parse(b) - Date.parse(a)) / 86_400_000);
 
-/** Recompensa do primeiro acesso do dia: 5 fichas × dias seguidos, até 7. Devolve as fichas dadas. */
+/** Recompensa do primeiro acesso do dia: atualiza a sequência de dias e concede +1 giro na Roleta. */
 export function daily(s: State, today: string): number {
   if (s.lastDay === today) return 0;
   s.streak = s.lastDay && dayDiff(s.lastDay, today) === 1 ? s.streak + 1 : 1;
   s.lastDay = today;
-  const reward = 5 * Math.min(s.streak, 7);
-  s.tokens += reward;
-  return reward;
+  return 1;
 }
 
 // ===== protocolo =====

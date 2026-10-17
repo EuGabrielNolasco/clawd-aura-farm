@@ -2,9 +2,9 @@ import "./style.css";
 import { ACHIEVEMENTS, achievementProgress, checkAchievements } from "./achievements";
 import { COSMETICS, cosmeticById, SLOTS, type Slot } from "./cosmetics";
 import {
-  allMaxed, applyEvent, buffActive, canBuy, canPrestige, clickGain, comboFor, costOf, daily, EV,
+  allMaxed, applyEvent, buffActive, canBuy, canPrestige, clickGain, comboFor, costOf, daily, earn, EV,
   goldenVisible, isMaxed, LEVEL_BONUS, levelOf, LV, mult, nowSec, parseEvents, passive, passivePerSecond,
-  PRESTIGE_BONUS, RANKS, schedule, thiefVisible, THIEF, todayBR, UPGRADES, type State,
+  PRESTIGE_BONUS, RANKS, schedule, thiefVisible, todayBR, UPGRADES, type State,
 } from "./game";
 import { createFx, reduceMotion } from "./fx";
 import { clawdSvg } from "./mini";
@@ -16,7 +16,10 @@ import {
   player, sanitize, save, saveGoogleAccount, saveGoogleAccountVault,
   saveMuted, savePlayer, type Player,
 } from "./storage";
-import { addSpin, loadSpins, renderWheelSvg, spinWheel } from "./wheel";
+import {
+  addSpin, getWheelTokensWon, loadSpins, PRIZES, recordMissionProgress,
+  renderWheelSvg, spinWheel, WHEEL_MISSIONS, type MissionStat,
+} from "./wheel";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const stage = $("stage"), mascot = $("mascot");
@@ -116,6 +119,7 @@ interface LocalExtState {
   cosmic: number;
   bonusAura: number;
   spentAura: number;
+  buffUntil?: number;
 }
 function loadLocalExt(): LocalExtState {
   try {
@@ -127,10 +131,11 @@ function loadLocalExt(): LocalExtState {
         cosmic: Math.max(0, Math.floor(Number(raw.cosmic) || 0)),
         bonusAura: Math.max(0, Number(raw.bonusAura) || 0),
         spentAura: Math.max(0, Number(raw.spentAura) || 0),
+        buffUntil: Math.max(0, Number(raw.buffUntil) || 0),
       };
     }
   } catch { /* ignore */ }
-  return { ia: state.upgrades.ia, portal: state.upgrades.portal, cosmic: state.upgrades.cosmic, bonusAura: 0, spentAura: 0 };
+  return { ia: state.upgrades.ia, portal: state.upgrades.portal, cosmic: state.upgrades.cosmic, bonusAura: 0, spentAura: 0, buffUntil: 0 };
 }
 function saveLocalExt(ext: LocalExtState) {
   try { localStorage.setItem(LOCAL_EXT_KEY, JSON.stringify(ext)); } catch { /* ignore */ }
@@ -140,18 +145,10 @@ state.upgrades.ia = Math.max(state.upgrades.ia, localExt.ia);
 state.upgrades.portal = Math.max(state.upgrades.portal, localExt.portal);
 state.upgrades.cosmic = Math.max(state.upgrades.cosmic, localExt.cosmic);
 
-function enforceLocalCosmetics(serverOwned?: string[]) {
+function enforceLocalCosmetics() {
   for (const id of localCos.owned) {
     if (!state.owned.includes(id) && cosmeticById(id)) {
       state.owned.push(id);
-    }
-  }
-  if (serverOwned) {
-    for (const id of localCos.localBought) {
-      if (!serverOwned.includes(id) && cosmeticById(id)) {
-        const price = cosmeticById(id)?.price ?? 0;
-        state.tokens = Math.max(0, state.tokens - price);
-      }
     }
   }
   for (const [slot, val] of Object.entries(localCos.equipped) as [Slot, string | null | undefined][]) {
@@ -161,6 +158,16 @@ function enforceLocalCosmetics(serverOwned?: string[]) {
       state.equipped[slot] = val;
     }
   }
+  // Fichas 67 vêm EXCLUSIVAMENTE de conquistas concluídas e pegas na roleta (menos enfeites comprados)
+  const achTokens = state.achievements.reduce((sum, id) => {
+    const a = ACHIEVEMENTS.find(x => x.id === id);
+    return sum + (a ? a.reward : 0);
+  }, 0);
+  const spentTokens = state.owned.reduce((sum, id) => {
+    const c = cosmeticById(id);
+    return sum + (c ? c.price : 0);
+  }, 0);
+  state.tokens = Math.max(0, achTokens + getWheelTokensWon() - spentTokens);
 }
 
 enforceLocalCosmetics();
@@ -181,6 +188,9 @@ function onServer(r: ServerState, pending: string) {
     state.total += localExt.bonusAura;
     state.lifetime += localExt.bonusAura;
   }
+  if (localExt.buffUntil && localExt.buffUntil > state.buffUntil) {
+    state.buffUntil = localExt.buffUntil;
+  }
 
   // Se o progresso local for maior (ex: jogou offline ou restaurou backup), preserva os maiores valores
   if (prevState.lifetime > state.lifetime) {
@@ -188,7 +198,6 @@ function onServer(r: ServerState, pending: string) {
     state.total = Math.max(state.total, prevState.total);
     state.lifetime = Math.max(state.lifetime, prevState.lifetime);
     state.prestige = Math.max(state.prestige, prevState.prestige);
-    state.tokens = Math.max(state.tokens, prevState.tokens);
     for (const u of UPGRADES) {
       state.upgrades[u.id] = Math.max(state.upgrades[u.id], prevState.upgrades[u.id]);
     }
@@ -197,13 +206,13 @@ function onServer(r: ServerState, pending: string) {
     }
   }
 
-  enforceLocalCosmetics(r.owned ?? []);
+  enforceLocalCosmetics();
 
   for (const [c, a] of parseEvents(pending)) applyEvent(state, c, a, combo(), now());
   enforceLocalCosmetics();
   save(state);
   if (firstSync && r.offline >= 60) welcomeBack(r.offline, r.offline_gain);
-  if (r.daily > 0) dailyReward(r.daily, state.streak);
+  if (r.daily > 0) dailyReward(state.streak);
   for (const id of r.new_achievements ?? []) achievementUnlocked(id);
   firstSync = false;
 
@@ -254,18 +263,33 @@ function updateWheelBadge() {
   if (btn) btn.disabled = spinsState.spins <= 0 || isSpinning;
 }
 
-function dailyReward(tokens: number, streak: number) {
-  toast(`🔥 Sequência de ${streak} ${streak === 1 ? "dia" : "dias"}! +${tokens} Fichas 67 pelo login de hoje.`);
-  sfx.daily();
-  spinsState.spins = addSpin();
+function dailyReward(streak: number) {
+  spinsState = loadSpins(todayBR());
   updateWheelBadge();
+  toast(`🔥 Sequência de ${streak} ${streak === 1 ? "dia" : "dias"}! +1 giro grátis na Roleta pelo login diário!`);
+  sfx.daily();
 }
 
 function achievementUnlocked(id: string) {
   const a = ACHIEVEMENTS.find(x => x.id === id);
   if (!a) return;
-  toast(`🎖 Conquista: ${a.name} (+${a.reward} fichas)`);
+  enforceLocalCosmetics();
+  spinsState.spins = addSpin();
+  updateWheelBadge();
+  toast(`🎖 Conquista: ${a.name} (+${a.reward} Fichas 67 e +1 giro na Roleta!)`);
   sfx.achievement();
+}
+
+function trackMission(stat: MissionStat, amount = 1) {
+  const completed = recordMissionProgress(todayBR(), stat, amount);
+  spinsState = loadSpins(todayBR());
+  if (completed.length > 0) {
+    updateWheelBadge();
+    for (const m of completed) {
+      toast(`🎯 Missão concluída: ${m.name}! +1 giro na Roleta!`);
+      sfx.achievement();
+    }
+  }
 }
 
 /** Aplica um evento local e, no modo online, manda para o servidor. */
@@ -281,6 +305,7 @@ function act(code: string, arg = "") {
     localExt.cosmic = 0;
     localExt.bonusAura = 0;
     localExt.spentAura = 0;
+    localExt.buffUntil = 0;
     saveLocalExt(localExt);
   } else if (code === "i" && state.upgrades.ia > prevIa) {
     localExt.ia = state.upgrades.ia;
@@ -314,6 +339,7 @@ function act(code: string, arg = "") {
     for (const sl of SLOTS) {
       localCos.equipped[sl.id] = state.equipped[sl.id] ?? null;
     }
+    enforceLocalCosmetics();
     saveLocalCos(localCos);
     save(state);
     sync?.broadcastCosmetics(myName, state.equipped as Record<string, string>);
@@ -341,6 +367,7 @@ const shopItems = UPGRADES.map(u => {
   btn.addEventListener("click", () => {
     if (!canBuy(state, u.id)) { sfx.denied(); return; }
     act(u.code);
+    trackMission("upgrades", 1);
     sfx.buy();
     const r = btn.getBoundingClientRect();
     fx.burst(r.left + r.width / 2, r.top, null, 10);
@@ -364,7 +391,7 @@ function levelUp(l: number) {
   replay($("star"), "nudge");
   spinsState.spins = addSpin();
   updateWheelBadge();
-  toast(`🎰 Nível ${RANKS[l][1]}! +1 giro grátis na Roleta da Sorte.`);
+  toast(`🎰 Rank subido: ${RANKS[l][1]}! +1 giro grátis na Roleta da Sorte.`);
 }
 
 
@@ -422,9 +449,11 @@ function updateEvents() {
 }
 
 $("golden").addEventListener("click", () => {
+  const prevGoldens = state.goldens;
   act(EV.golden);
   $("golden").hidden = true;
-  if (buffActive(state, now())) {
+  if (state.goldens > prevGoldens || buffActive(state, now())) {
+    trackMission("events", 1);
     sfx.megaBrain();
     if ("vibrate" in navigator) navigator.vibrate([40, 50, 40]);
     const b = $("banner");
@@ -437,15 +466,18 @@ $("golden").addEventListener("click", () => {
 });
 
 $("thief").addEventListener("click", () => {
-  const before = state.tokens;
+  const prevThieves = state.thieves;
   act(EV.thief);
   $("thief").hidden = true;
-  if (state.tokens > before) {
+  if (state.thieves > prevThieves) {
+    const recoveredAura = Math.max(670, Math.floor(passivePerSecond(state) * 180));
+    earn(state, recoveredAura);
+    localExt.bonusAura += recoveredAura;
+    saveLocalExt(localExt);
+    trackMission("events", 1);
     sfx.thiefCaught();
     if ("vibrate" in navigator) navigator.vibrate([40, 50, 40]);
-    spinsState.spins = addSpin();
-    updateWheelBadge();
-    toast(`🦹 Pegou o ladrão! +${THIEF.tokens} Fichas 67 e +1 giro na Roleta!`);
+    toast(`🦹 Pegou o ladrão! Recuperou +${fmtShort(recoveredAura)} de aura!`);
   }
   render();
 });
@@ -508,6 +540,8 @@ function render() {
 function farm(ev?: MouseEvent) {
   clickTimes.push(performance.now());
   const r = act(EV.click)!;
+  trackMission("clicks", 1);
+  if (r.crit) trackMission("crits", 1);
   const rect = mascot.getBoundingClientRect();
   const x = ev?.clientX || rect.left + rect.width / 2;
   const y = ev?.clientY || rect.top + rect.height / 3;
@@ -528,7 +562,7 @@ function farm(ev?: MouseEvent) {
 function localTick() {
   schedule(state, now());
   const reward = daily(state, todayBR());
-  if (reward) dailyReward(reward, state.streak);
+  if (reward) dailyReward(state.streak);
   for (const a of checkAchievements(state, levelOf(state.total), allMaxed(state))) achievementUnlocked(a.id);
   const gAcc = loadGoogleAccount();
   if (gAcc) saveGoogleAccountVault(gAcc.email, activePlayer, state);
@@ -616,14 +650,53 @@ function renderMenu() {
     p.hidden = p.dataset.panel !== tab;
   }
   // só redesenha quando algo que aparece no menu mudou
-  const key = JSON.stringify([tab, state.tokens, state.achievements, state.owned, state.equipped, spinsState.spins, activePlayer.id, myName, lastRank]);
+  const key = JSON.stringify([tab, state.tokens, state.achievements, state.owned, state.equipped, spinsState.spins, spinsState.dailyProgress, activePlayer.id, myName, lastRank]);
   if (key === renderedMenu) return;
   renderedMenu = key;
   if (tab === "account") renderAccount();
-  if (tab === "wheel") updateWheelBadge();
+  if (tab === "wheel") { updateWheelBadge(); renderWheelPanel(); }
   if (tab === "ach") renderAchievements();
   if (tab === "cos") renderCosmetics();
   if (tab === "stats") renderStats();
+}
+
+function renderWheelPanel() {
+  const mList = document.getElementById("wheel-missions-list");
+  if (mList) {
+    const prog = spinsState.dailyProgress;
+    mList.replaceChildren(...WHEEL_MISSIONS.map(m => {
+      const cur = prog ? Math.min(prog[m.stat] || 0, m.target) : 0;
+      const done = Boolean(prog?.claimed.includes(m.id)) || cur >= m.target;
+      const pct = done ? 100 : Math.min(100, Math.floor((cur / m.target) * 100));
+      const li = document.createElement("li");
+      li.className = done ? "done" : "";
+      li.innerHTML = `
+        <span class="medal">${done ? "✅" : "🎯"}</span>
+        <span>
+          <b></b>
+          <small></small>
+          <div class="ach-prog"><i style="width: ${pct}%"></i><span>${cur} / ${m.target}</span></div>
+        </span>
+        <em>+1 🎰</em>
+      `;
+      li.querySelector("b")!.textContent = m.name;
+      li.querySelector("small")!.textContent = m.desc;
+      return li;
+    }));
+  }
+
+  const pList = document.getElementById("wheel-prizes-list");
+  if (pList && !pList.children.length) {
+    pList.replaceChildren(...PRIZES.map(p => {
+      const card = document.createElement("div");
+      card.className = "wheel-prize-chip";
+      card.style.borderColor = p.color;
+      card.innerHTML = `<span class="wp-icon">${p.icon}</span><div><b></b><small></small></div>`;
+      card.querySelector("b")!.textContent = p.name;
+      card.querySelector("small")!.textContent = p.desc;
+      return card;
+    }));
+  }
 }
 
 function renderAccount() {
@@ -1050,8 +1123,19 @@ $("wheel-spin-btn")?.addEventListener("click", () => {
   const res = spinWheel(state, now(), wheelRot);
   if (!res) { isSpinning = false; return; }
 
+  if (res.auraGain > 0) {
+    localExt.bonusAura += res.auraGain;
+    saveLocalExt(localExt);
+  }
+  if (state.buffUntil > (localExt.buffUntil || 0)) {
+    localExt.buffUntil = state.buffUntil;
+    saveLocalExt(localExt);
+  }
+  enforceLocalCosmetics();
+  save(state);
+
   wheelRot = res.degrees;
-  spinsState.spins = res.remainingSpins;
+  spinsState = loadSpins(todayBR());
   updateWheelBadge();
 
   const disc = $("wheel-disc");
