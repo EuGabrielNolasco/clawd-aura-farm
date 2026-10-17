@@ -134,6 +134,8 @@ function enforceLocalCosmetics(serverOwned?: string[]) {
 
 enforceLocalCosmetics();
 if (myName) sync?.broadcastCosmetics(myName, state.equipped as Record<string, string>);
+let nameInputPrefilled = false;
+let settingName = false;
 
 function onServer(r: ServerState, pending: string) {
   clockOffset = r.now - nowSec();
@@ -165,7 +167,7 @@ function onServer(r: ServerState, pending: string) {
   for (const id of r.new_achievements ?? []) achievementUnlocked(id);
   firstSync = false;
 
-  if (r.name) {
+  if (r.name && !settingName) {
     myName = r.name;
     localCos.name = r.name;
     saveLocalCos(localCos);
@@ -177,12 +179,19 @@ function onServer(r: ServerState, pending: string) {
   }
   lastRank = r.rank;
   lastAhead = r.ahead;
+  const displayNick = myName || r.name;
   const myLvl = levelOf(state.lifetime);
   const myPrest = state.prestige || 0;
-  $("my-rank").textContent = r.name
-    ? `Você é ${r.name} · #${r.rank} · ${RANKS[myLvl][1]} · ⭐ ${myPrest} · ${fmtShort(state.lifetime)} de aura`
+  $("my-rank").textContent = displayNick
+    ? `Você é ${displayNick} · #${r.rank ?? 1} · ${RANKS[myLvl][1]} · ⭐ ${myPrest} · ${fmtShort(state.lifetime)} de aura`
     : "Escolha um apelido abaixo para aparecer no ranking com seu Rank e suas Estrelas!";
-  if (r.name && !$<HTMLInputElement>("name").value) $<HTMLInputElement>("name").value = r.name;
+  if (displayNick && !nameInputPrefilled) {
+    nameInputPrefilled = true;
+    const nameEl = $<HTMLInputElement>("name");
+    if (nameEl && document.activeElement !== nameEl) nameEl.value = displayNick;
+    const accNameEl = $<HTMLInputElement>("acc-name-input");
+    if (accNameEl && document.activeElement !== accNameEl) accNameEl.value = displayNick;
+  }
   render();
 }
 
@@ -531,7 +540,7 @@ function renderMenu() {
     p.hidden = p.dataset.panel !== tab;
   }
   // só redesenha quando algo que aparece no menu mudou
-  const key = JSON.stringify([tab, state.tokens, state.achievements, state.owned, state.equipped, spinsState.spins, activePlayer.id]);
+  const key = JSON.stringify([tab, state.tokens, state.achievements, state.owned, state.equipped, spinsState.spins, activePlayer.id, myName, lastRank]);
   if (key === renderedMenu) return;
   renderedMenu = key;
   if (tab === "account") renderAccount();
@@ -549,7 +558,12 @@ function renderAccount() {
   $("acc-name").textContent = myName || gAcc?.name || "Jogador Anônimo";
   $("acc-status").textContent = sync ? "🟢 Sincronizado na Nuvem" : "🟡 Modo Local (Offline)";
   $("acc-id-short").textContent = "Conta Principal Preservada";
-  $("acc-rank-label").textContent = lastRank ? `#${lastRank} no ranking` : "Sem apelido no ranking";
+  $("acc-rank-label").textContent = lastRank ? `#${lastRank} no ranking` : (myName ? `Apelido: ${myName}` : "Sem apelido no ranking");
+
+  const accNameInput = document.getElementById("acc-name-input") as HTMLInputElement | null;
+  if (accNameInput && document.activeElement !== accNameInput && !accNameInput.value && myName) {
+    accNameInput.value = myName;
+  }
 
   const badge = $("acc-linked-badge");
   const signoutBtn = $("google-signout-btn");
@@ -694,7 +708,7 @@ function rankRow(e: RankRow) {
   topLine.className = "rank-line";
   const nameEl = document.createElement("span");
   nameEl.className = "rank-name";
-  nameEl.textContent = e.name;
+  nameEl.textContent = isMe && myName ? myName : e.name;
 
   const starsEl = document.createElement("span");
   starsEl.className = "rank-stars";
@@ -708,14 +722,6 @@ function rankRow(e: RankRow) {
   badge.className = `rank-badge lv-${lvl}`;
   badge.textContent = rankTitle;
   subLine.append(badge);
-
-  const equippedList = SLOTS.map(s => (eq[s.id] ? cosmeticById(eq[s.id]!) : undefined)).filter((c): c is NonNullable<typeof c> => Boolean(c));
-  for (const cos of equippedList) {
-    const chip = document.createElement("span");
-    chip.className = "rank-cos-chip";
-    chip.textContent = `✨ ${cos.name}`;
-    subLine.append(chip);
-  }
 
   info.append(topLine, subLine);
 
@@ -804,16 +810,15 @@ interface GoogleWindow {
 function completeGoogleSignIn(info: { sub: string; email: string; name?: string; picture?: string }) {
   const normEmail = info.email.trim().toLowerCase();
 
-  // Se o navegador for novo (sem conta), restaura o progresso salvo para esse Google
-  if (state.lifetime === 0) {
-    const vault = loadGoogleAccountVault(normEmail);
-    if (vault) {
-      activePlayer = vault.player;
-      state = vault.state;
-      savePlayer(activePlayer);
-      save(state);
-      sync?.setPlayer(activePlayer);
-    }
+  // Se o cofre desse Google tiver mais progresso que o navegador atual, restaura o cofre sem criar chave nova
+  const vault = loadGoogleAccountVault(normEmail);
+  if (vault && vault.state.lifetime > state.lifetime) {
+    activePlayer = vault.player;
+    state = vault.state;
+    savePlayer(activePlayer);
+    save(state);
+    sync?.setPlayer(activePlayer);
+    void sync?.flush();
   }
 
   // NUNCA cria chave nova nem reseta a conta atual: apenas vincula ao Google OAuth 2.0
@@ -991,26 +996,54 @@ $("wheel-spin-btn")?.addEventListener("click", () => {
   }, 4000);
 });
 
+async function handleNicknameChange(rawName: string, msgEl: HTMLElement | null) {
+  const enteredName = rawName.trim().replace(/\s+/g, " ");
+  if (enteredName.length < 2 || enteredName.length > 20) {
+    if (msgEl) msgEl.textContent = "O apelido precisa ter de 2 a 20 caracteres.";
+    return;
+  }
+  settingName = true;
+  if (msgEl) msgEl.textContent = "Salvando…";
+  try {
+    myName = enteredName;
+    localCos.name = enteredName;
+    saveLocalCos(localCos);
+    nameInputPrefilled = true;
+    const nameInp = document.getElementById("name") as HTMLInputElement | null;
+    if (nameInp) nameInp.value = enteredName;
+    const accInp = document.getElementById("acc-name-input") as HTMLInputElement | null;
+    if (accInp) accInp.value = enteredName;
+
+    if (sync) {
+      await sync.setName(enteredName);
+      sync.broadcastCosmetics(myName, state.equipped as Record<string, string>);
+      await sync.flush();
+      void loadRanking();
+    }
+    if (msgEl) msgEl.textContent = "✅ Apelido salvo!";
+    renderedMenu = "";
+    renderAccount();
+    render();
+  } catch (err) {
+    if (msgEl) msgEl.textContent = (err as Error).message;
+  } finally {
+    settingName = false;
+  }
+}
+
+document.getElementById("acc-name-form")?.addEventListener("submit", e => {
+  e.preventDefault();
+  const val = (document.getElementById("acc-name-input") as HTMLInputElement | null)?.value ?? "";
+  void handleNicknameChange(val, document.getElementById("acc-name-msg"));
+});
+
 if (sync) {
   $("ranking-open").hidden = false;
   $("tab-ranking").hidden = false;
-  $<HTMLFormElement>("name-form").addEventListener("submit", async e => {
+  $<HTMLFormElement>("name-form").addEventListener("submit", e => {
     e.preventDefault();
-    const msg = $("name-msg");
-    msg.textContent = "Salvando…";
-    try {
-      const enteredName = $<HTMLInputElement>("name").value.trim();
-      await sync.setName(enteredName);
-      myName = enteredName;
-      localCos.name = enteredName;
-      saveLocalCos(localCos);
-      sync.broadcastCosmetics(myName, state.equipped as Record<string, string>);
-      msg.textContent = "Apelido salvo!";
-      await sync.flush();
-      void loadRanking();
-    } catch (err) {
-      msg.textContent = (err as Error).message;
-    }
+    const val = $<HTMLInputElement>("name").value;
+    void handleNicknameChange(val, $("name-msg"));
   });
   void sync.flush();
 } else {

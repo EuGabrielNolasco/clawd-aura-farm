@@ -199,6 +199,20 @@
         </div>
       </div>
 
+      <div class="acc-box">
+        <h4>✏️ Apelido no Jogo e no Ranking</h4>
+        <p class="acc-desc">Escolha ou mude seu apelido a qualquer momento (independente do nome da sua conta Google):</p>
+        <form id="acc-name-form">
+          <div class="name-row">
+            <input id="acc-name-input" name="name" required minlength="2" maxlength="20" autocomplete="nickname"
+                   placeholder="Digite seu apelido no jogo..."
+                   pattern="[A-Za-zÀ-ÖØ-öø-ÿ0-9 _.\-]{2,20}" title="De 2 a 20 letras, números, espaço, _ . ou -">
+            <button type="submit">Salvar Apelido</button>
+          </div>
+          <p class="name-msg" id="acc-name-msg" role="status"></p>
+        </form>
+      </div>
+
       <div class="acc-box highlight">
         <h4>🔐 Entrar / Sincronizar com Google</h4>
         <p class="acc-desc">Conecte sua conta diretamente com o Google para salvar e acessar seu progresso em qualquer dispositivo:</p>
@@ -253,8 +267,9 @@
       <form id="name-form">
         <label for="name">Seu apelido</label>
         <div class="name-row">
-          <input id="name" name="name" required minlength="3" maxlength="20" autocomplete="nickname"
-                 pattern="[A-Za-zÀ-ÖØ-öø-ÿ0-9 _.\-]{3,20}" title="De 3 a 20 letras, números, espaço, _ . ou -">
+          <input id="name" name="name" required minlength="2" maxlength="20" autocomplete="nickname"
+                 placeholder="Digite seu apelido..."
+                 pattern="[A-Za-zÀ-ÖØ-öø-ÿ0-9 _.\-]{2,20}" title="De 2 a 20 letras, números, espaço, _ . ou -">
           <button type="submit">Salvar</button>
         </div>
         <p class="name-msg" id="name-msg" role="status"></p>
