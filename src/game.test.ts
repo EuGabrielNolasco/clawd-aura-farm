@@ -85,10 +85,10 @@ describe("aura passiva", () => {
 
   it("recalcula o ganho ao subir de nível no meio do período", () => {
     const s = newState();
-    s.upgrades.dc = 10;
+    s.upgrades.dc = 30;
     passive(s, 3600);
-    // sem recalcular, seria exatamente 3600 × (2 + 8.000)
-    expect(s.total).toBeGreaterThan(3600 * 8002);
+    // sem recalcular, seria exatamente 3600 × (2 + 7.500)
+    expect(s.total).toBeGreaterThan(3600 * 7502);
   });
 });
 
@@ -200,8 +200,8 @@ describe("loja", () => {
   it("aplica os efeitos dos upgrades", () => {
     const s = newState();
     s.upgrades = { aux: 2, click: 2, crit: 5, fab: 1, dc: 1, ia: 1, portal: 1, cosmic: 1 };
-    expect(passivePerSecond(s)).toBe((2 + 2 + 20 + 800 + 8000 + 45000) * 1.5);
-    expect(clickGain(s)).toBeCloseTo(67 * 1.85 * 1.5);
+    expect(passivePerSecond(s)).toBe((2 + 2 + 20 + 250 + 1200 + 3500) * 1.5);
+    expect(clickGain(s)).toBeCloseTo(67 * 1.65 * 1.5);
     expect(critChance(s)).toBeCloseTo(0.20);
   });
 

@@ -63,10 +63,10 @@ export const UPGRADES: readonly Upgrade[] = [
   { id: "click", code: "m", name: "Mão firme", desc: "+25% de aura por clique", baseCost: 600, growth: 1.38, max: 30 },
   { id: "crit", code: "s", name: "Olhar sigma", desc: "+2% de chance de crítico", baseCost: 15000, growth: 2.5, max: 10 },
   { id: "fab", code: "f", name: "Fábrica de 67", desc: "+20 de aura por segundo", baseCost: 8e4, growth: 1.28, max: 30 },
-  { id: "dc", code: "d", name: "Datacenter do Clawd", desc: "+800 de aura por segundo", baseCost: 6e7, growth: 1.32, max: 30 },
-  { id: "ia", code: "i", name: "IA Quântica 67", desc: "+8.000 de aura por segundo", baseCost: 6e8, growth: 1.35, max: 25 },
-  { id: "portal", code: "o", name: "Portal Multiversal", desc: "+45.000/s e +35% no clique", baseCost: 8e9, growth: 1.38, max: 20 },
-  { id: "cosmic", code: "x", name: "Aura cósmica", desc: "+50% em toda a aura", baseCost: 1.5e10, growth: 6, max: 5 },
+  { id: "dc", code: "d", name: "Datacenter do Clawd", desc: "+250 de aura por segundo", baseCost: 6e7, growth: 1.32, max: 30 },
+  { id: "ia", code: "i", name: "IA Quântica 67", desc: "+1.200 de aura por segundo", baseCost: 8e8, growth: 1.38, max: 25 },
+  { id: "portal", code: "o", name: "Portal Multiversal", desc: "+3.500/s e +15% no clique", baseCost: 1.2e10, growth: 1.42, max: 20 },
+  { id: "cosmic", code: "x", name: "Aura cósmica", desc: "+50% em toda a aura", baseCost: 2.5e10, growth: 6, max: 5 },
 ];
 
 /**
@@ -135,12 +135,12 @@ export const mult = (s: State) =>
 export const buffActive = (s: State, now: number) => now < s.buffUntil;
 
 /** Ganho de um clique sem crítico, sem combo e sem Mega Brain. */
-export const clickGain = (s: State) => BASE_CLICK * (1 + 0.25 * s.upgrades.click + 0.35 * s.upgrades.portal) * mult(s);
+export const clickGain = (s: State) => BASE_CLICK * (1 + 0.25 * s.upgrades.click + 0.15 * s.upgrades.portal) * mult(s);
 
 export const critChance = (s: State) => BASE_CRIT + 0.02 * s.upgrades.crit;
 
 export const passivePerSecond = (s: State) =>
-  (BASE_PASSIVE + 1 * s.upgrades.aux + 20 * s.upgrades.fab + 800 * s.upgrades.dc + 8000 * s.upgrades.ia + 45000 * s.upgrades.portal) * mult(s);
+  (BASE_PASSIVE + 1 * s.upgrades.aux + 20 * s.upgrades.fab + 250 * s.upgrades.dc + 1200 * s.upgrades.ia + 3500 * s.upgrades.portal) * mult(s);
 
 export function earn(s: State, amount: number) {
   s.aura += amount;

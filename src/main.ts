@@ -17,8 +17,8 @@ import {
   saveMuted, savePlayer, type Player,
 } from "./storage";
 import {
-  addSpin, getWheelTokensWon, loadSpins, PRIZES, recordMissionProgress,
-  renderWheelSvg, spinWheel, WHEEL_MISSIONS, type MissionStat,
+  addSpin, applySpinPrize, getWheelTokensWon, loadSpins, PRIZES, recordMissionProgress,
+  renderWheelSvg, spinWheel, WHEEL_MISSIONS, type MissionStat, type WheelPrize,
 } from "./wheel";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -223,6 +223,8 @@ function onServer(r: ServerState, _pending: string) {
     }
     state.lifetime = Math.max(state.lifetime, srv.lifetime);
     state.prestige = Math.max(state.prestige, srv.prestige, localExt.prestige || 0);
+    state.streak = Math.max(state.streak, srv.streak);
+    if (r.daily) dailyReward(state.streak);
     for (const id of srv.owned) {
       if (!state.owned.includes(id) && cosmeticById(id)) state.owned.push(id);
     }
@@ -273,6 +275,16 @@ function welcomeBack(seconds: number, gained: number) {
   sfx.welcome();
 }
 
+const DAILY_SPIN_CLAIM_KEY = "clawd-aura-farm:daily-spin-v3";
+
+function isDailySpinClaimedToday(): boolean {
+  try {
+    return localStorage.getItem(DAILY_SPIN_CLAIM_KEY) === todayBR();
+  } catch {
+    return true;
+  }
+}
+
 function updateWheelBadge() {
   const b = $("wheel-badge");
   if (b) {
@@ -281,14 +293,31 @@ function updateWheelBadge() {
   }
   const val = $("wheel-spins-val");
   if (val) val.textContent = String(spinsState.spins);
+  const liveStats = document.getElementById("wheel-live-stats");
+  if (liveStats) {
+    const buffed = buffActive(state, now());
+    const buffStr = buffed ? ` · 🧠 ×7 (${Math.ceil(state.buffUntil - now())}s)` : "";
+    liveStats.textContent = `🎟 Fichas 67: ${state.tokens} · ⚡ Aura: ${fmtShort(state.aura)}${buffStr}`;
+  }
   const btn = $("wheel-spin-btn") as HTMLButtonElement | null;
   if (btn) btn.disabled = spinsState.spins <= 0 || isSpinning;
 }
 
 function dailyReward(streak: number) {
-  spinsState = loadSpins(todayBR());
+  const today = todayBR();
+  try {
+    if (localStorage.getItem(DAILY_SPIN_CLAIM_KEY) !== today) {
+      localStorage.setItem(DAILY_SPIN_CLAIM_KEY, today);
+      spinsState.spins = addSpin();
+    } else {
+      spinsState = loadSpins(today);
+    }
+  } catch {
+    spinsState = loadSpins(today);
+  }
   updateWheelBadge();
-  toast(`🔥 Sequência de ${streak} ${streak === 1 ? "dia" : "dias"}! +1 giro grátis na Roleta pelo login diário!`);
+  const s = Math.max(1, streak);
+  toast(`🔥 Login Diário (${s} ${s === 1 ? "dia" : "dias"}): +1 giro grátis na Roleta da Sorte!`);
   sfx.daily();
 }
 
@@ -576,7 +605,7 @@ function farm(ev?: MouseEvent) {
 function localTick() {
   schedule(state, now());
   const reward = daily(state, todayBR());
-  if (reward) dailyReward(state.streak);
+  if (reward || !isDailySpinClaimedToday()) dailyReward(state.streak);
   for (const a of checkAchievements(state, levelOf(state.total), allMaxed(state))) achievementUnlocked(a.id);
   const gAcc = loadGoogleAccount();
   if (gAcc) saveGoogleAccountVault(gAcc.email, activePlayer, state);
@@ -589,7 +618,7 @@ setInterval(() => {
   const dt = (t - lastTick) / 1000;
   passive(state, dt, now());
   if (state.upgrades.ia > 0 || state.upgrades.portal > 0) {
-    const extraRate = (8000 * state.upgrades.ia + 45000 * state.upgrades.portal) * mult(state) * (buffActive(state, now()) ? 7 : 1);
+    const extraRate = (1200 * state.upgrades.ia + 3500 * state.upgrades.portal) * mult(state) * (buffActive(state, now()) ? 7 : 1);
     localExt.bonusAura += extraRate * Math.min(dt, 10);
     saveLocalExt(localExt);
   }
@@ -663,12 +692,13 @@ function renderMenu() {
   for (const p of document.querySelectorAll<HTMLElement>("[data-panel]")) {
     p.hidden = p.dataset.panel !== tab;
   }
+  if (tab === "wheel") updateWheelBadge();
   // só redesenha quando algo que aparece no menu mudou
-  const key = JSON.stringify([tab, state.tokens, state.achievements, state.owned, state.equipped, spinsState.spins, spinsState.dailyProgress, activePlayer.id, myName, lastRank]);
+  const key = JSON.stringify([tab, state.tokens, state.streak, state.achievements, state.owned, state.equipped, spinsState.spins, spinsState.dailyProgress, activePlayer.id, myName, lastRank]);
   if (key === renderedMenu) return;
   renderedMenu = key;
   if (tab === "account") renderAccount();
-  if (tab === "wheel") { updateWheelBadge(); renderWheelPanel(); }
+  if (tab === "wheel") renderWheelPanel();
   if (tab === "ach") renderAchievements();
   if (tab === "cos") renderCosmetics();
   if (tab === "stats") renderStats();
@@ -678,7 +708,20 @@ function renderWheelPanel() {
   const mList = document.getElementById("wheel-missions-list");
   if (mList) {
     const prog = spinsState.dailyProgress;
-    mList.replaceChildren(...WHEEL_MISSIONS.map(m => {
+    const streakDays = Math.max(1, state.streak || 1);
+    const dailyLi = document.createElement("li");
+    dailyLi.className = "done";
+    dailyLi.innerHTML = `
+      <span class="medal">🔥</span>
+      <span>
+        <b>Login Diário (${streakDays} ${streakDays === 1 ? "dia" : "dias"})</b>
+        <small>Entrar no jogo hoje garante +1 giro grátis na Roleta</small>
+        <div class="ach-prog"><i style="width: 100%"></i><span>1 / 1 (Recebido hoje!)</span></div>
+      </span>
+      <em>+1 🎰</em>
+    `;
+
+    mList.replaceChildren(dailyLi, ...WHEEL_MISSIONS.map(m => {
       const cur = prog ? Math.min(prog[m.stat] || 0, m.target) : 0;
       const done = Boolean(prog?.claimed.includes(m.id)) || cur >= m.target;
       const pct = done ? 100 : Math.min(100, Math.floor((cur / m.target) * 100));
@@ -1133,14 +1176,15 @@ $<HTMLInputElement>("input-import-json")?.addEventListener("change", async e => 
 });
 
 // ===== eventos da roleta da sorte 67 =====
-$("wheel-spin-btn")?.addEventListener("click", () => {
-  if (isSpinning || spinsState.spins <= 0) return;
-  isSpinning = true;
-  const res = spinWheel(state, now(), wheelRot);
-  if (!res) { isSpinning = false; return; }
+let pendingWheelPrize: WheelPrize | null = null;
 
-  if (res.auraGain > 0) {
-    localExt.bonusAura += res.auraGain;
+function claimPendingWheelPrize(): { msg: string; prize: WheelPrize } | null {
+  if (!pendingWheelPrize) return null;
+  const prize = pendingWheelPrize;
+  pendingWheelPrize = null;
+  const applied = applySpinPrize(state, prize, now());
+  if (applied.auraGain > 0) {
+    localExt.bonusAura += applied.auraGain;
     saveLocalExt(localExt);
   }
   if (state.buffUntil > (localExt.buffUntil || 0)) {
@@ -1148,9 +1192,25 @@ $("wheel-spin-btn")?.addEventListener("click", () => {
     saveLocalExt(localExt);
   }
   save(state);
+  const gAcc = loadGoogleAccount();
+  if (gAcc) saveGoogleAccountVault(gAcc.email, activePlayer, state);
+  return { msg: applied.msg, prize };
+}
 
+window.addEventListener("beforeunload", () => {
+  claimPendingWheelPrize();
+});
+
+$("wheel-spin-btn")?.addEventListener("click", () => {
+  if (isSpinning || spinsState.spins <= 0) return;
+  isSpinning = true;
+  const res = spinWheel(state, now(), wheelRot, false);
+  if (!res) { isSpinning = false; return; }
+
+  pendingWheelPrize = res.prize;
   wheelRot = res.degrees;
   spinsState = loadSpins(todayBR());
+  $("wheel-result").textContent = "🎰 Girando a Roleta da Sorte 67…";
   updateWheelBadge();
 
   const disc = $("wheel-disc");
@@ -1161,6 +1221,8 @@ $("wheel-spin-btn")?.addEventListener("click", () => {
   setTimeout(() => {
     clearInterval(tickInterval);
     isSpinning = false;
+    const claimed = claimPendingWheelPrize();
+    const finalMsg = claimed ? claimed.msg : res.message;
     sfx.wheelWin();
     if (res.prize.id === "megabrain" || res.prize.id === "overdrive_67") {
       sfx.megaBrain();
@@ -1169,12 +1231,12 @@ $("wheel-spin-btn")?.addEventListener("click", () => {
       replay(b, "show");
       fx.flash();
     }
-    $("wheel-result").textContent = `🎉 ${res.message}`;
-    toast(`🎰 Roleta: ${res.message}`);
+    $("wheel-result").textContent = `🎉 ${finalMsg}`;
+    toast(`🎰 Roleta: ${finalMsg}`);
     const r = $("wheel-disc").getBoundingClientRect();
     fx.burst(r.left + r.width / 2, r.top + r.height / 2, null, 25);
-    save(state);
     sync?.broadcastCosmetics(myName, state.equipped as Record<string, string>, state.lifetime, state.prestige);
+    spinsState = loadSpins(todayBR());
     updateWheelBadge();
     renderedMenu = "";
     render();

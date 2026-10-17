@@ -730,6 +730,19 @@ button:focus-visible { outline: 3px solid var(--ink); outline-offset: 4px; }
 
 /* ===== Roleta da Sorte 67 ===== */
 .wheel-header { text-align: center; margin-bottom: .6rem; }
+.wheel-live-stats {
+  margin: .35rem auto 0;
+  padding: .35rem .75rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--violet) 22%, var(--night));
+  border: 1px solid color-mix(in srgb, var(--aura) 45%, transparent);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: .85rem;
+  font-weight: 700;
+  width: fit-content;
+  max-width: 100%;
+}
 .wheel-container {
   position: relative;
   width: min(280px, 75vw);

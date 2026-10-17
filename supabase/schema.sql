@@ -126,8 +126,8 @@ declare
   v_item record;
   v_ahead jsonb;
   v_slot text;
-  v_base float8[] := array[150, 600, 15000, 8e4, 6e7, 6e8, 8e9, 1.5e10]::float8[];
-  v_growth float8[] := array[1.25, 1.38, 2.5, 1.28, 1.32, 1.35, 1.38, 6]::float8[];
+  v_base float8[] := array[150, 600, 15000, 8e4, 6e7, 8e8, 1.2e10, 2.5e10]::float8[];
+  v_growth float8[] := array[1.25, 1.38, 2.5, 1.28, 1.32, 1.38, 1.42, 6]::float8[];
   v_max int[] := array[40, 30, 10, 30, 30, 25, 20, 5];
 begin
   if p_secret is null or length(p_secret) < 32 or length(p_secret) > 128 then
@@ -184,7 +184,7 @@ begin
   for i in 1..40 loop
     exit when v_t >= v_end;
     v_lvl := public.aura_level(p.total);
-    v_rate := (2 + 1 * p.ups[1] + 20 * p.ups[4] + 800 * p.ups[5] + 8000 * p.ups[6] + 45000 * p.ups[7]) * public.aura_mult(p.total, p.ups, p.prestige)
+    v_rate := (2 + 1 * p.ups[1] + 20 * p.ups[4] + 250 * p.ups[5] + 1200 * p.ups[6] + 3500 * p.ups[7]) * public.aura_mult(p.total, p.ups, p.prestige)
               * case when v_t < v_buff then 7 else 1 end;
     v_dt := v_end - v_t;
     if v_lvl < 15 then
@@ -231,7 +231,7 @@ begin
       p.click_budget := p.click_budget - 1;
       p.rng := (p.rng * 48271) % 2147483647;
       v_crit := p.rng::float8 / 2147483647 < 0.1::float8 + 0.02::float8 * p.ups[3];
-      v_gain := 67 * (1 + 0.25::float8 * p.ups[2] + 0.35::float8 * p.ups[7]) * public.aura_mult(p.total, p.ups, p.prestige)
+      v_gain := 67 * (1 + 0.25::float8 * p.ups[2] + 0.15::float8 * p.ups[7]) * public.aura_mult(p.total, p.ups, p.prestige)
                 * case when v_crit then 10 else 1 end * v_combo * case when v_now < p.buff_until then 7 else 1 end;
       p.aura := p.aura + v_gain;
       p.total := p.total + v_gain;

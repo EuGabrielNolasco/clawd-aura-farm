@@ -261,26 +261,36 @@ export interface SpinResult {
   auraGain: number;
 }
 
+/** Aplica o prêmio da fatia sorteada diretamente no estado atual do jogador. */
+export function applySpinPrize(s: State, prize: WheelPrize, now: number): { msg: string; tokensGain: number; auraGain: number } {
+  const { msg, tokensGain = 0, auraGain = 0 } = prize.action(s, now);
+  if (tokensGain > 0) {
+    const data = readStoredSpins();
+    data.wheelTokens = (data.wheelTokens || 0) + tokensGain;
+    saveSpins(data);
+  }
+  return { msg, tokensGain, auraGain };
+}
+
 /** Roda a roleta e calcula os graus de rotação (mínimo 5 voltas completas). */
 export function spinWheel(
   s: State,
   now: number,
-  currentDegrees = 0
+  currentDegrees = 0,
+  applyImmediately = true
 ): SpinResult | null {
   const data = readStoredSpins();
 
   if (data.spins <= 0) return null;
 
   data.spins--;
+  saveSpins(data);
 
   const prizeIndex = Math.floor(Math.random() * PRIZES.length);
   const prize = PRIZES[prizeIndex];
-  const { msg, tokensGain = 0, auraGain = 0 } = prize.action(s, now);
-
-  if (tokensGain > 0) {
-    data.wheelTokens = (data.wheelTokens || 0) + tokensGain;
-  }
-  saveSpins(data);
+  const applied = applyImmediately
+    ? applySpinPrize(s, prize, now)
+    : { msg: prize.desc, tokensGain: 0, auraGain: 0 };
 
   // Cada fatia ocupa 360 / PRIZES.length graus (36 graus para 10 fatias)
   const sliceSize = 360 / PRIZES.length;
@@ -292,11 +302,11 @@ export function spinWheel(
   return {
     prizeIndex,
     prize,
-    message: msg,
+    message: applied.msg,
     degrees: newDegrees,
     remainingSpins: data.spins,
-    tokensGain,
-    auraGain,
+    tokensGain: applied.tokensGain,
+    auraGain: applied.auraGain,
   };
 }
 
