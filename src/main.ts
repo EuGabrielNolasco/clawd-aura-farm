@@ -120,6 +120,7 @@ interface LocalExtState {
   bonusAura: number;
   spentAura: number;
   buffUntil?: number;
+  prestige?: number;
 }
 function loadLocalExt(): LocalExtState {
   try {
@@ -132,10 +133,11 @@ function loadLocalExt(): LocalExtState {
         bonusAura: Math.max(0, Number(raw.bonusAura) || 0),
         spentAura: Math.max(0, Number(raw.spentAura) || 0),
         buffUntil: Math.max(0, Number(raw.buffUntil) || 0),
+        prestige: Math.max(0, Math.floor(Number(raw.prestige) || 0)),
       };
     }
   } catch { /* ignore */ }
-  return { ia: state.upgrades.ia, portal: state.upgrades.portal, cosmic: state.upgrades.cosmic, bonusAura: 0, spentAura: 0, buffUntil: 0 };
+  return { ia: state.upgrades.ia, portal: state.upgrades.portal, cosmic: state.upgrades.cosmic, bonusAura: 0, spentAura: 0, buffUntil: 0, prestige: state.prestige };
 }
 function saveLocalExt(ext: LocalExtState) {
   try { localStorage.setItem(LOCAL_EXT_KEY, JSON.stringify(ext)); } catch { /* ignore */ }
@@ -145,6 +147,7 @@ state.upgrades.ia = Math.max(state.upgrades.ia, localExt.ia);
 state.upgrades.portal = Math.max(state.upgrades.portal, localExt.portal);
 state.upgrades.cosmic = Math.max(state.upgrades.cosmic, localExt.cosmic);
 if (localExt.buffUntil) state.buffUntil = Math.max(state.buffUntil, localExt.buffUntil);
+if (localExt.prestige) state.prestige = Math.max(state.prestige, localExt.prestige);
 
 const TOKENS_RESTORED_KEY = "clawd-aura-farm:tokens-restored-v3";
 
@@ -194,7 +197,7 @@ function onServer(r: ServerState, _pending: string) {
   clockOffset = r.now - nowSec();
   const srv = toState(r);
 
-  if (firstSync && state.lifetime === 0 && srv.lifetime > 0) {
+  if (firstSync && state.lifetime === 0 && state.prestige === 0 && srv.lifetime > 0) {
     // Dispositivo/navegador novo: restaura o estado salvo na nuvem
     state = srv;
     state.upgrades.ia = Math.max(state.upgrades.ia, localExt.ia);
@@ -202,16 +205,9 @@ function onServer(r: ServerState, _pending: string) {
     state.upgrades.cosmic = Math.max(state.upgrades.cosmic, localExt.cosmic);
     if (r.offline >= 60) welcomeBack(r.offline, r.offline_gain);
   } else {
-    // Jogador já ativo localmente: NUNCA reduz aura, fichas, upgrades ou buffs locais!
-    if (firstSync && srv.lifetime > state.lifetime && srv.prestige >= state.prestige) {
-      state.aura = Math.max(state.aura, srv.aura);
-      state.total = Math.max(state.total, srv.total);
-      state.lifetime = Math.max(state.lifetime, srv.lifetime);
-      state.prestige = Math.max(state.prestige, srv.prestige);
-    }
-    for (const u of UPGRADES) {
-      state.upgrades[u.id] = Math.max(state.upgrades[u.id], srv.upgrades[u.id]);
-    }
+    // Jogador já ativo localmente: preserva 100% da aura, upgrades e reset de prestígio locais!
+    state.lifetime = Math.max(state.lifetime, srv.lifetime);
+    state.prestige = Math.max(state.prestige, srv.prestige, localExt.prestige || 0);
     for (const id of srv.owned) {
       if (!state.owned.includes(id) && cosmeticById(id)) state.owned.push(id);
     }
@@ -314,11 +310,20 @@ function act(code: string, arg = "") {
     localExt.bonusAura = 0;
     localExt.spentAura = 0;
     localExt.buffUntil = 0;
+    localExt.prestige = state.prestige;
     saveLocalExt(localExt);
+    save(state);
+    const gAcc = loadGoogleAccount();
+    if (gAcc) saveGoogleAccountVault(gAcc.email, activePlayer, state);
+    sync?.broadcastCosmetics(myName, state.equipped as Record<string, string>, state.lifetime, state.prestige);
+    sync?.push(code === EV.prestige ? "pz" : "z");
+    void sync?.flush();
+    return r;
   } else {
     localExt.ia = state.upgrades.ia;
     localExt.portal = state.upgrades.portal;
     localExt.cosmic = state.upgrades.cosmic;
+    localExt.prestige = state.prestige;
     saveLocalExt(localExt);
   }
   if (code === EV.buyCosmetic || code === EV.equip || code === EV.unequip) {
