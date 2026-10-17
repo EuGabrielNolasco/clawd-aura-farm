@@ -38,7 +38,18 @@ async function rpc<T>(fn: string, body: object, keepalive = false): Promise<T> {
 /** Converte a resposta do servidor em State, validando tudo que chega. */
 export function toState(r: ServerState): State {
   const upgrades: Record<string, unknown> = {};
-  UPGRADES.forEach((u, i) => { upgrades[u.id] = r.ups?.[i]; });
+  if (r.ups?.length === 6) {
+    upgrades.aux = r.ups[0];
+    upgrades.click = r.ups[1];
+    upgrades.crit = r.ups[2];
+    upgrades.fab = r.ups[3];
+    upgrades.dc = r.ups[4];
+    upgrades.ia = 0;
+    upgrades.portal = 0;
+    upgrades.cosmic = r.ups[5];
+  } else {
+    UPGRADES.forEach((u, i) => { upgrades[u.id] = r.ups?.[i]; });
+  }
   return sanitize({
     aura: r.aura, total: r.total, lifetime: r.lifetime, upgrades, rng: r.rng,
     goldenAt: r.golden_at ?? 0, buffUntil: r.buff_until, thiefAt: r.thief_at ?? 0,

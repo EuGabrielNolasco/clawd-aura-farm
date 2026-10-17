@@ -38,7 +38,7 @@ do $$ declare r jsonb; begin
   assert (r->>'combo')::float8 = 1, 'combo deveria ser 1: ' || r::text;
   assert abs((r->>'total')::float8 - 10827) < 1, 'total diverge do JS: ' || r::text;
   assert abs((r->>'aura')::float8 - 10258) < 1, 'aura diverge do JS: ' || r::text;
-  assert r->'ups' = '[2,2,0,0,0,0]'::jsonb, 'upgrades divergem do JS: ' || r::text;
+  assert r->'ups' = '[2,2,0,0,0,0,0,0]'::jsonb, 'upgrades divergem do JS: ' || r::text;
   assert (r->>'clicks')::int = 60, 'contador de cliques errado: ' || r::text;
 end $$;
 
@@ -154,9 +154,9 @@ end $$;
 do $$ declare r jsonb; v_life float8; begin
   r := pg_temp.sync(1, 'p');
   assert (r->>'prestige')::int = 0, 'renasceu antes do nível máximo: ' || r::text;
-  update public.aura_players set total = 3e11, lifetime = 3e11, ups = '{5,5,5,5,5,0}' where id = pg_temp.pid(1);
+  update public.aura_players set total = 3e11, lifetime = 3e11, ups = '{5,5,5,5,5,0,0,0}' where id = pg_temp.pid(1);
   r := pg_temp.sync(1, 'p');
-  assert (r->>'prestige')::int = 1 and (r->>'total')::float8 < 1e6 and r->'ups' = '[0,0,0,0,0,0]'::jsonb, 'prestígio errado: ' || r::text;
+  assert (r->>'prestige')::int = 1 and (r->>'total')::float8 < 1e6 and r->'ups' = '[0,0,0,0,0,0,0,0]'::jsonb, 'prestígio errado: ' || r::text;
   assert (r->>'lifetime')::float8 >= 3e11, 'prestígio apagou a aura vitalícia: ' || r::text;
   v_life := (r->>'lifetime')::float8;
   r := pg_temp.sync(1, 'z');

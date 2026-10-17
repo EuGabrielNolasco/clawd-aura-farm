@@ -44,7 +44,7 @@ export const THIEF = { min: 240, max: 600, show: 8, slack: 4, tokens: 3 } as con
 export const BUFF_S = 67;
 export const BUFF_MULT = 7;
 
-export type UpgradeId = "aux" | "click" | "crit" | "fab" | "dc" | "cosmic";
+export type UpgradeId = "aux" | "click" | "crit" | "fab" | "dc" | "ia" | "portal" | "cosmic";
 
 export interface Upgrade {
   id: UpgradeId;
@@ -64,12 +64,14 @@ export const UPGRADES: readonly Upgrade[] = [
   { id: "crit", code: "s", name: "Olhar sigma", desc: "+3% de chance de crítico", baseCost: 5000, growth: 2.2, max: 10 },
   { id: "fab", code: "f", name: "Fábrica de 67", desc: "+60 de aura por segundo", baseCost: 2e4, growth: 1.22, max: 30 },
   { id: "dc", code: "d", name: "Datacenter do Clawd", desc: "+4.000 de aura por segundo", baseCost: 2e7, growth: 1.25, max: 30 },
+  { id: "ia", code: "i", name: "IA Quântica 67", desc: "+150.000 de aura por segundo", baseCost: 1.5e8, growth: 1.26, max: 25 },
+  { id: "portal", code: "o", name: "Portal Multiversal", desc: "+5.000.000/s e +100% no clique", baseCost: 1.2e9, growth: 1.28, max: 20 },
   { id: "cosmic", code: "x", name: "Aura cósmica", desc: "Dobra toda a aura", baseCost: 3.2e9, growth: 5, max: 5 },
 ];
 
 /**
  * Protocolo de eventos (uma letra cada, menos os enfeites, que levam a letra do item ou do slot):
- *   c clique · g Cérebro Dourado · t ladrão · a m s f d x compra de upgrade · p renascer · z zerar
+ *   c clique · g Cérebro Dourado · t ladrão · a m s f d i o x compra de upgrade · p renascer · z zerar
  *   K<item> comprar enfeite · E<item> equipar · U<slot> tirar
  */
 export const EV = { click: "c", golden: "g", thief: "t", prestige: "p", reset: "z", buyCosmetic: "K", equip: "E", unequip: "U" } as const;
@@ -112,7 +114,7 @@ export const randomSeed = () => 1 + Math.floor(Math.random() * (RNG_MOD - 2));
 
 export const nowSec = () => Date.now() / 1000;
 
-const zeroUpgrades = (): Record<UpgradeId, number> => ({ aux: 0, click: 0, crit: 0, fab: 0, dc: 0, cosmic: 0 });
+const zeroUpgrades = (): Record<UpgradeId, number> => ({ aux: 0, click: 0, crit: 0, fab: 0, dc: 0, ia: 0, portal: 0, cosmic: 0 });
 
 export const newState = (rng = randomSeed()): State => ({
   aura: 0, total: 0, lifetime: 0, upgrades: zeroUpgrades(), rng,
@@ -127,18 +129,18 @@ export function levelOf(total: number): number {
   return l;
 }
 
-const mult = (s: State) =>
+export const mult = (s: State) =>
   LEVEL_BONUS ** levelOf(s.total) * 2 ** s.upgrades.cosmic * (1 + PRESTIGE_BONUS * s.prestige);
 
 export const buffActive = (s: State, now: number) => now < s.buffUntil;
 
 /** Ganho de um clique sem crítico, sem combo e sem Mega Brain. */
-export const clickGain = (s: State) => BASE_CLICK * (1 + 0.5 * s.upgrades.click) * mult(s);
+export const clickGain = (s: State) => BASE_CLICK * (1 + 0.5 * s.upgrades.click + 1.0 * s.upgrades.portal) * mult(s);
 
 export const critChance = (s: State) => BASE_CRIT + 0.03 * s.upgrades.crit;
 
 export const passivePerSecond = (s: State) =>
-  (BASE_PASSIVE + 2 * s.upgrades.aux + 60 * s.upgrades.fab + 4000 * s.upgrades.dc) * mult(s);
+  (BASE_PASSIVE + 2 * s.upgrades.aux + 60 * s.upgrades.fab + 4000 * s.upgrades.dc + 150000 * s.upgrades.ia + 5000000 * s.upgrades.portal) * mult(s);
 
 export function earn(s: State, amount: number) {
   s.aura += amount;
