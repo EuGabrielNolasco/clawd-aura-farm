@@ -283,10 +283,7 @@ begin
 
     elsif v_ev = 'E' then
       select * into v_item from public.aura_cosmetics() c where c.code = v_arg;
-      continue when not found;
-      if not (v_item.id = any(p.owned)) then
-        p.owned := p.owned || v_item.id;
-      end if;
+      continue when not found or not (v_item.id = any(p.owned));
       p.equipped := p.equipped || jsonb_build_object(v_item.slot, v_item.id);
 
     elsif v_ev = 'U' then
