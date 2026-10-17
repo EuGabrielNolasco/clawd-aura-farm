@@ -177,4 +177,18 @@ describe("storage e sincronização de contas", () => {
     expect(p1.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
     expect(p1.secret.length).toBe(64);
   });
+
+  it("preserva itens em equipped garantindo-os em owned ao sanitizar", () => {
+    const dirty = {
+      aura: 100,
+      owned: [],
+      equipped: { hat: "hat_coroa", outfit: "outfit_terno" },
+    };
+    const clean = sanitize(dirty as any);
+    expect(clean.equipped.hat).toBe("hat_coroa");
+    expect(clean.equipped.outfit).toBe("outfit_terno");
+    expect(clean.owned).toContain("hat_coroa");
+    expect(clean.owned).toContain("outfit_terno");
+  });
 });
+

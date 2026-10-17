@@ -36,7 +36,10 @@ export function sanitize(data: Record<string, unknown> | null | undefined): Stat
   const eq = data.equipped as Record<string, unknown> | undefined;
   for (const { id: slot } of SLOTS) {
     const item = typeof eq?.[slot] === "string" ? cosmeticById(eq[slot] as string) : undefined;
-    if (item && item.slot === slot && s.owned.includes(item.id)) s.equipped[slot as Slot] = item.id;
+    if (item && item.slot === slot) {
+      if (!s.owned.includes(item.id)) s.owned.push(item.id);
+      s.equipped[slot as Slot] = item.id;
+    }
   }
   return s;
 }

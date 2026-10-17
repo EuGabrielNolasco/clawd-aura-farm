@@ -66,11 +66,18 @@ export async function fetchPlayerState(p: Player): Promise<ServerState> {
   return rpc<ServerState>("aura_sync", { p_id: p.id, p_secret: p.secret, p_events: "" });
 }
 
+export interface ActionMeta {
+  action: "equip" | "unequip";
+  slot: string;
+  item?: string;
+}
+
 export interface LivePlayerMeta {
   name?: string;
   equipped?: Record<string, string>;
   lifetime?: number;
   prestige?: number;
+  actionMeta?: ActionMeta;
 }
 
 export function deduplicateRankRows(
@@ -183,11 +190,25 @@ export function createSync(
     if (!meta || typeof meta.name !== "string") return;
     const key = meta.name.toLowerCase();
     const prev = livePlayerByName.get(key) ?? {};
+    const newEquipped = { ...(prev.equipped ?? {}) };
+    if (meta.equipped && typeof meta.equipped === "object") {
+      for (const [k, v] of Object.entries(meta.equipped)) {
+        if (v) newEquipped[k] = v;
+      }
+    }
+    if (meta.actionMeta) {
+      if (meta.actionMeta.action === "equip" && meta.actionMeta.item) {
+        newEquipped[meta.actionMeta.slot] = meta.actionMeta.item;
+      } else if (meta.actionMeta.action === "unequip") {
+        delete newEquipped[meta.actionMeta.slot];
+      }
+    }
     livePlayerByName.set(key, {
       name: meta.name,
-      equipped: meta.equipped && typeof meta.equipped === "object" ? meta.equipped : prev.equipped,
+      equipped: newEquipped,
       lifetime: typeof meta.lifetime === "number" ? Math.max(prev.lifetime ?? 0, meta.lifetime) : prev.lifetime,
       prestige: typeof meta.prestige === "number" ? Math.max(prev.prestige ?? 0, meta.prestige) : prev.prestige,
+      actionMeta: meta.actionMeta,
     });
   }
 
@@ -236,14 +257,29 @@ export function createSync(
     } catch { /* ignore */ }
   }
 
-  function sendCosmeticsBroadcast(name: string | null, equipped: Record<string, string>, lifetime = 0, prestige = 0, force = false) {
+  function sendCosmeticsBroadcast(
+    name: string | null,
+    equipped: Record<string, string>,
+    lifetime = 0,
+    prestige = 0,
+    force = false,
+    actionMeta?: ActionMeta
+  ) {
     currentName = name;
     currentEquipped = equipped;
     currentLifetime = lifetime;
     currentPrestige = prestige;
     if (!name) return;
-    applyLiveMeta({ name, equipped, lifetime, prestige });
-    const payload = { playerId: p.id, name, equipped, lifetime: Math.floor(lifetime / 1000), prestige, ts: Date.now() };
+    applyLiveMeta({ name, equipped, lifetime, prestige, actionMeta });
+    const payload = {
+      playerId: p.id,
+      name,
+      equipped,
+      lifetime: Math.floor(lifetime / 1000),
+      prestige,
+      ts: Date.now(),
+      actionMeta,
+    };
     const serialized = JSON.stringify(payload);
     if (!force && serialized === lastBroadcastPayload) return;
     lastBroadcastPayload = serialized;
@@ -318,8 +354,14 @@ export function createSync(
       currentName = name;
       return rpc<void>("aura_set_name", { p_id: p.id, p_secret: p.secret, p_name: name });
     },
-    broadcastCosmetics: (name: string | null, equipped: Record<string, string>, lifetime = 0, prestige = 0, force = false) =>
-      sendCosmeticsBroadcast(name, equipped, lifetime, prestige, force),
+    broadcastCosmetics: (
+      name: string | null,
+      equipped: Record<string, string>,
+      lifetime = 0,
+      prestige = 0,
+      force = false,
+      actionMeta?: ActionMeta
+    ) => sendCosmeticsBroadcast(name, equipped, lifetime, prestige, force, actionMeta),
     top: async (
       localProgress?: { lifetime: number; prestige: number; equipped?: Record<string, string> },
       nameOverride?: string | null

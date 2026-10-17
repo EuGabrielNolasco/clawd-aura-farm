@@ -1,6 +1,6 @@
 import "./style.css";
 import { ACHIEVEMENTS, achievementProgress, checkAchievements } from "./achievements";
-import { COSMETICS, cosmeticById, SLOTS, type Slot } from "./cosmetics";
+import { COSMETICS, cosmeticByCode, cosmeticById, slotByCode, SLOTS, type Slot } from "./cosmetics";
 import {
   allMaxed, applyEvent, buffActive, canBuy, canPrestige, clickGain, comboFor, costOf, daily, earn, EV,
   goldenVisible, isMaxed, LEVEL_BONUS, levelOf, LV, mult, nowSec, passive, passivePerSecond,
@@ -8,7 +8,7 @@ import {
 } from "./game";
 import { createFx, reduceMotion } from "./fx";
 import { clawdSvg } from "./mini";
-import { createSync, onlineEnabled, toState, type RankRow, type ServerState } from "./online";
+import { createSync, onlineEnabled, toState, type ActionMeta, type RankRow, type ServerState } from "./online";
 import { sfx, setMuted } from "./sound";
 import {
   accountShareUrl, clearGoogleAccount, derivePlayerFromGoogle, exportAccountToken,
@@ -112,24 +112,44 @@ const sync = onlineEnabled ? createSync(
         (myName && meta.name && meta.name.trim().toLowerCase() === myName.trim().toLowerCase())
       );
 
-      if (isMyAccount && meta.equipped && typeof meta.equipped === "object") {
+      if (isMyAccount) {
         let equippedChanged = false;
-        for (const sl of SLOTS) {
-          const item = meta.equipped[sl.id];
-          if (item && cosmeticById(item)) {
-            if (state.equipped[sl.id] !== item) {
-              state.equipped[sl.id] = item;
-              localCos.equipped[sl.id] = item;
+
+        // Se o outro dispositivo enviou uma ação intencional de equipar ou desequipar
+        if (meta.actionMeta) {
+          const { action, slot, item } = meta.actionMeta;
+          const sl = slot as Slot;
+          if (action === "equip" && item && cosmeticById(item)) {
+            if (state.equipped[sl] !== item) {
+              state.equipped[sl] = item;
+              localCos.equipped[sl] = item;
               if (!state.owned.includes(item)) state.owned.push(item);
               if (!localCos.owned.includes(item)) localCos.owned.push(item);
               equippedChanged = true;
             }
-          } else if (!item && state.equipped[sl.id]) {
-            delete state.equipped[sl.id];
-            delete localCos.equipped[sl.id];
-            equippedChanged = true;
+          } else if (action === "unequip") {
+            if (state.equipped[sl]) {
+              delete state.equipped[sl];
+              delete localCos.equipped[sl];
+              equippedChanged = true;
+            }
+          }
+        } else if (meta.equipped && typeof meta.equipped === "object") {
+          // Broadcast normal de estado: NUNCA DELETA itens locais, apenas mescla os slots equipados
+          for (const sl of SLOTS) {
+            const item = meta.equipped[sl.id];
+            if (item && cosmeticById(item)) {
+              if (state.equipped[sl.id] !== item) {
+                state.equipped[sl.id] = item;
+                localCos.equipped[sl.id] = item;
+                if (!state.owned.includes(item)) state.owned.push(item);
+                if (!localCos.owned.includes(item)) localCos.owned.push(item);
+                equippedChanged = true;
+              }
+            }
           }
         }
+
         if (equippedChanged) {
           save(state);
           saveLocalCos(localCos);
@@ -152,7 +172,7 @@ let firstSync = true;
 const LOCAL_COS_KEY = "clawd-aura-farm:cos-v1";
 interface LocalCosState {
   owned: string[];
-  equipped: Partial<Record<Slot, string | null>>;
+  equipped: Partial<Record<Slot, string>>;
   localBought: string[];
   name?: string | null;
 }
@@ -245,11 +265,15 @@ function enforceLocalCosmetics(serverTokens?: number) {
       state.owned.push(id);
     }
   }
-  for (const [slot, val] of Object.entries(localCos.equipped) as [Slot, string | null | undefined][]) {
-    if (val === null) {
-      delete state.equipped[slot];
-    } else if (val && state.owned.includes(val) && cosmeticById(val) && !state.equipped[slot]) {
-      state.equipped[slot] = val;
+  for (const [slot, val] of Object.entries(localCos.equipped) as [Slot, string | undefined][]) {
+    if (val && cosmeticById(val)) {
+      if (!state.owned.includes(val)) state.owned.push(val);
+      if (!state.equipped[slot]) state.equipped[slot] = val;
+    }
+  }
+  for (const sl of SLOTS) {
+    if (state.equipped[sl.id]) {
+      localCos.equipped[sl.id] = state.equipped[sl.id];
     }
   }
 
@@ -555,10 +579,24 @@ function act(code: string, arg = "") {
       if (!localCos.owned.includes(id)) localCos.owned.push(id);
     }
     for (const sl of SLOTS) {
-      localCos.equipped[sl.id] = state.equipped[sl.id] ?? null;
+      if (state.equipped[sl.id]) {
+        localCos.equipped[sl.id] = state.equipped[sl.id];
+      } else {
+        delete localCos.equipped[sl.id];
+      }
     }
     saveLocalCos(localCos);
-    sync?.broadcastCosmetics(myName, state.equipped as Record<string, string>, state.lifetime, state.prestige, true);
+
+    let actionMeta: ActionMeta | undefined;
+    if (code === EV.equip) {
+      const c = cosmeticByCode(arg);
+      if (c) actionMeta = { action: "equip", slot: c.slot, item: c.id };
+    } else if (code === EV.unequip) {
+      const sl = slotByCode(arg);
+      if (sl) actionMeta = { action: "unequip", slot: sl };
+    }
+
+    sync?.broadcastCosmetics(myName, state.equipped as Record<string, string>, state.lifetime, state.prestige, true, actionMeta);
     void sync?.setEquipped(state.equipped as Record<string, string>);
     void pushFullProfileSync();
   }
