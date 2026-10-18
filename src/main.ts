@@ -265,25 +265,38 @@ function enforceLocalCosmetics(serverTokens?: number) {
       state.owned.push(id);
     }
   }
-  for (const [slot, val] of Object.entries(localCos.equipped) as [Slot, string | undefined][]) {
-    if (val && cosmeticById(val)) {
-      if (!state.owned.includes(val)) state.owned.push(val);
-      if (!state.equipped[slot]) state.equipped[slot] = val;
+  for (const id of state.owned) {
+    if (!localCos.owned.includes(id) && cosmeticById(id)) {
+      localCos.owned.push(id);
     }
   }
-  for (const sl of SLOTS) {
-    if (state.equipped[sl.id]) {
-      localCos.equipped[sl.id] = state.equipped[sl.id];
+
+  // Se state.equipped estiver completamente vazio (primeiro boot), adota localCos.equipped
+  if (Object.keys(state.equipped).length === 0 && Object.keys(localCos.equipped).length > 0) {
+    for (const [slot, val] of Object.entries(localCos.equipped) as [Slot, string | undefined][]) {
+      if (val && cosmeticById(val)) {
+        state.equipped[slot] = val;
+      }
+    }
+  } else {
+    // Caso contrário, localCos.equipped espelha fielmente state.equipped
+    for (const sl of SLOTS) {
+      if (state.equipped[sl.id]) {
+        localCos.equipped[sl.id] = state.equipped[sl.id];
+      } else {
+        delete localCos.equipped[sl.id];
+      }
     }
   }
 
   // Preserva e sincroniza o saldo de Fichas 67 entre os aparelhos
   const wheelTokens = getWheelTokensWon();
   const achTokens = getAchievementTokens();
+  const maxTokens = Math.max(state.tokens, achTokens + wheelTokens);
   if (typeof serverTokens === "number" && serverTokens > 0) {
-    state.tokens = serverTokens;
+    state.tokens = Math.max(serverTokens, maxTokens);
   } else {
-    state.tokens = Math.max(state.tokens, achTokens + wheelTokens);
+    state.tokens = maxTokens;
   }
 }
 
@@ -386,31 +399,31 @@ function onServer(r: ServerState, _pending: string) {
       }
     }
 
-    // 4. Enfeites equipados: se o servidor tem itens e o usuário não mudou localmente nos últimos 3 segundos,
-    // sincroniza os itens oficiais salvos
-    if (srv.equipped && typeof srv.equipped === "object" && Date.now() - lastLocalEquipTime > 3000) {
+    // 4. Enfeites equipados: o cliente local é a autoridade máxima sobre os enfeites vestidos.
+    // O servidor NUNCA deve reverter ou substituir itens equipados pelo usuário!
+    // Apenas adota do servidor se o perfil local estiver completamente sem enfeites equipados:
+    if (srv.equipped && typeof srv.equipped === "object" && Object.keys(state.equipped).length === 0) {
       let equippedChanged = false;
       for (const sl of SLOTS) {
         const srvItem = srv.equipped[sl.id];
         if (srvItem && cosmeticById(srvItem)) {
-          if (state.equipped[sl.id] !== srvItem) {
-            state.equipped[sl.id] = srvItem;
-            localCos.equipped[sl.id] = srvItem;
-            if (!state.owned.includes(srvItem)) state.owned.push(srvItem);
-            if (!localCos.owned.includes(srvItem)) localCos.owned.push(srvItem);
-            equippedChanged = true;
-          }
+          state.equipped[sl.id] = srvItem;
+          localCos.equipped[sl.id] = srvItem;
+          if (!state.owned.includes(srvItem)) state.owned.push(srvItem);
+          if (!localCos.owned.includes(srvItem)) localCos.owned.push(srvItem);
+          equippedChanged = true;
         }
       }
       if (equippedChanged) stateChanged = true;
     }
   }
 
-  // 5. Se o dispositivo local possui MAIS progresso que o servidor, envia syncProfile completo para atualizar a nuvem
+  // 5. Se o dispositivo local possui MAIS progresso ou enfeites mais atualizados que o servidor:
   const serverTokens = typeof r.tokens === "number" ? r.tokens : 0;
   const localHasHigherUps = UPGRADES.some(u => (state.upgrades[u.id] ?? 0) > (srv.upgrades[u.id] ?? 0));
   const localHasMoreOwned = state.owned.some(id => !srv.owned.includes(id));
   const localHasMoreAch = state.achievements.some(id => !srv.achievements.includes(id));
+  const localEquippedDiffers = SLOTS.some(sl => (state.equipped[sl.id] || "") !== (srv.equipped?.[sl.id] || ""));
 
   const localAhead =
     state.lifetime > srv.lifetime ||
@@ -420,13 +433,14 @@ function onServer(r: ServerState, _pending: string) {
     localHasHigherUps ||
     localHasMoreOwned ||
     localHasMoreAch ||
+    localEquippedDiffers ||
     (state.tokens > serverTokens && Date.now() - lastLocalEquipTime < 3000);
 
   if (localAhead) {
     void pushFullProfileSync();
   }
 
-  if (Object.keys(state.equipped).length > 0 && Object.keys(srv.equipped || {}).length === 0) {
+  if (localEquippedDiffers) {
     void sync?.setEquipped(state.equipped as Record<string, string>);
   }
 
