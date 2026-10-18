@@ -1,7 +1,7 @@
 // Cliente do ranking no Supabase. Fala direto com a API REST (PostgREST), sem SDK.
 // O navegador só manda eventos; quem calcula a aura é o servidor (supabase/schema.sql).
 
-import { UPGRADES, type State } from "./game";
+import { levelOf, UPGRADES, type State } from "./game";
 import { sanitize, type Player } from "./storage";
 
 const URL_ = import.meta.env.VITE_SUPABASE_URL as string | undefined;
@@ -20,7 +20,16 @@ export interface ServerState {
   daily: number; new_achievements: string[]; offline: number; offline_gain: number;
 }
 
-export interface RankRow { rank: number; name: string; lifetime: number; prestige: number; equipped: Record<string, string>; me?: boolean }
+export interface RankRow {
+  rank: number;
+  name: string;
+  lifetime: number;
+  prestige: number;
+  equipped: Record<string, string>;
+  total?: number;
+  level?: number;
+  me?: boolean;
+}
 
 async function rpc<T>(fn: string, body: object, keepalive = false): Promise<T> {
   const res = await fetch(`${URL_}/rest/v1/rpc/${fn}`, {
@@ -77,6 +86,8 @@ export interface LivePlayerMeta {
   equipped?: Record<string, string>;
   lifetime?: number;
   prestige?: number;
+  total?: number;
+  level?: number;
   actionMeta?: ActionMeta;
 }
 
@@ -84,7 +95,13 @@ export function deduplicateRankRows(
   rows: RankRow[],
   liveMap?: Map<string, LivePlayerMeta>,
   currentName?: string | null,
-  localProgress?: { lifetime: number; prestige: number; equipped?: Record<string, string> }
+  localProgress?: {
+    lifetime: number;
+    prestige: number;
+    equipped?: Record<string, string>;
+    total?: number;
+    level?: number;
+  }
 ): RankRow[] {
   const byKey = new Map<string, RankRow>();
 
@@ -97,8 +114,14 @@ export function deduplicateRankRows(
     const isMe = Boolean(r.me || (currentName && key === currentName.trim().toLowerCase()));
     const myLifetime = isMe && localProgress ? Math.max(localProgress.lifetime, 0) : 0;
     const myPrestige = isMe && localProgress ? Math.max(localProgress.prestige, 0) : 0;
+    const myTotal = isMe && localProgress ? Math.max(localProgress.total ?? 0, 0) : 0;
+    const myLevel = isMe && localProgress && typeof localProgress.level === "number" ? localProgress.level : undefined;
+
     const rowLifetime = Math.max(r.lifetime, live?.lifetime ?? 0, myLifetime);
     const rowPrestige = Math.max(r.prestige ?? 0, live?.prestige ?? 0, myPrestige);
+    const rowTotal = Math.max(r.total ?? 0, live?.total ?? 0, myTotal);
+    const rowLevel = myLevel ?? live?.level ?? r.level ?? (rowTotal > 0 ? levelOf(rowTotal) : levelOf(rowLifetime));
+
     const rowEquipped: Record<string, string> = {
       ...(r.equipped ?? {}),
       ...(live?.equipped ?? {}),
@@ -113,6 +136,8 @@ export function deduplicateRankRows(
         lifetime: rowLifetime,
         prestige: rowPrestige,
         equipped: rowEquipped,
+        total: rowTotal,
+        level: rowLevel,
         me: isMe,
       });
     } else {
@@ -124,6 +149,11 @@ export function deduplicateRankRows(
       for (const [k, v] of Object.entries(rowEquipped)) {
         if (v) mergedEquipped[k] = v;
       }
+      const finalLevel = (isMe && typeof myLevel === "number")
+        ? myLevel
+        : (typeof rowLevel === "number" ? rowLevel : existing.level);
+      const finalTotal = Math.max(rowTotal, existing.total ?? 0);
+
       if (pickNewer) {
         byKey.set(key, {
           rank: existing.rank,
@@ -131,11 +161,15 @@ export function deduplicateRankRows(
           lifetime: rowLifetime,
           prestige: rowPrestige,
           equipped: mergedEquipped,
+          total: finalTotal,
+          level: finalLevel,
           me: existing.me || isMe,
         });
       } else {
         existing.me = existing.me || isMe;
         existing.equipped = mergedEquipped;
+        if (typeof finalLevel === "number") existing.level = finalLevel;
+        if (finalTotal > 0) existing.total = finalTotal;
       }
     }
   }
@@ -151,12 +185,21 @@ export function deduplicateRankRows(
         lifetime: localProgress.lifetime,
         prestige: localProgress.prestige,
         equipped: localProgress.equipped ?? {},
+        total: localProgress.total,
+        level: localProgress.level,
         me: true,
       });
     } else {
       existing.me = true;
       existing.lifetime = Math.max(existing.lifetime, localProgress.lifetime);
       existing.prestige = Math.max(existing.prestige, localProgress.prestige);
+      if (typeof localProgress.level === "number") existing.level = localProgress.level;
+      if (typeof localProgress.total === "number") existing.total = Math.max(existing.total ?? 0, localProgress.total);
+      if (localProgress.equipped) {
+        for (const [k, v] of Object.entries(localProgress.equipped)) {
+          if (v) existing.equipped[k] = v;
+        }
+      }
     }
   }
 
@@ -185,6 +228,8 @@ export function createSync(
   let currentEquipped: Record<string, string> = {};
   let currentLifetime = 0;
   let currentPrestige = 0;
+  let currentTotal = 0;
+  let currentLevel: number | undefined;
 
   function applyLiveMeta(meta: LivePlayerMeta | undefined) {
     if (!meta || typeof meta.name !== "string") return;
@@ -208,6 +253,8 @@ export function createSync(
       equipped: newEquipped,
       lifetime: typeof meta.lifetime === "number" ? Math.max(prev.lifetime ?? 0, meta.lifetime) : prev.lifetime,
       prestige: typeof meta.prestige === "number" ? Math.max(prev.prestige ?? 0, meta.prestige) : prev.prestige,
+      total: typeof meta.total === "number" ? meta.total : prev.total,
+      level: typeof meta.level === "number" ? meta.level : prev.level,
       actionMeta: meta.actionMeta,
     });
   }
@@ -226,7 +273,7 @@ export function createSync(
           payload: { config: { broadcast: { self: false }, presence: { key: p.id } } },
           ref: "1",
         }));
-        if (currentName) sendCosmeticsBroadcast(currentName, currentEquipped, currentLifetime, currentPrestige, true);
+        if (currentName) sendCosmeticsBroadcast(currentName, currentEquipped, currentLifetime, currentPrestige, true, undefined, currentTotal, currentLevel);
       });
       socket.addEventListener("message", ev => {
         try {
@@ -263,20 +310,26 @@ export function createSync(
     lifetime = 0,
     prestige = 0,
     force = false,
-    actionMeta?: ActionMeta
+    actionMeta?: ActionMeta,
+    total = 0,
+    level?: number
   ) {
     currentName = name;
     currentEquipped = equipped;
     currentLifetime = lifetime;
     currentPrestige = prestige;
+    currentTotal = total;
+    currentLevel = level;
     if (!name) return;
-    applyLiveMeta({ name, equipped, lifetime, prestige, actionMeta });
+    applyLiveMeta({ name, equipped, lifetime, prestige, total, level, actionMeta });
     const payload = {
       playerId: p.id,
       name,
       equipped,
       lifetime: Math.floor(lifetime / 1000),
       prestige,
+      total: Math.floor(total),
+      level,
       ts: Date.now(),
       actionMeta,
     };
@@ -311,7 +364,13 @@ export function createSync(
 
   const mergeRankRows = (
     rows: RankRow[],
-    localProgress?: { lifetime: number; prestige: number; equipped?: Record<string, string> },
+    localProgress?: {
+      lifetime: number;
+      prestige: number;
+      equipped?: Record<string, string>;
+      total?: number;
+      level?: number;
+    },
     nameOverride?: string | null
   ) => deduplicateRankRows(rows, livePlayerByName, nameOverride || currentName, localProgress);
 
@@ -360,14 +419,28 @@ export function createSync(
       lifetime = 0,
       prestige = 0,
       force = false,
-      actionMeta?: ActionMeta
-    ) => sendCosmeticsBroadcast(name, equipped, lifetime, prestige, force, actionMeta),
+      actionMeta?: ActionMeta,
+      total = 0,
+      level?: number
+    ) => sendCosmeticsBroadcast(name, equipped, lifetime, prestige, force, actionMeta, total, level),
     top: async (
-      localProgress?: { lifetime: number; prestige: number; equipped?: Record<string, string> },
+      localProgress?: {
+        lifetime: number;
+        prestige: number;
+        equipped?: Record<string, string>;
+        total?: number;
+        level?: number;
+      },
       nameOverride?: string | null
     ) => mergeRankRows(await rpc<RankRow[]>("aura_top", { p_limit: 50 }), localProgress, nameOverride),
     around: async (
-      localProgress?: { lifetime: number; prestige: number; equipped?: Record<string, string> },
+      localProgress?: {
+        lifetime: number;
+        prestige: number;
+        equipped?: Record<string, string>;
+        total?: number;
+        level?: number;
+      },
       nameOverride?: string | null
     ) => mergeRankRows(await rpc<RankRow[]>("aura_around", { p_id: p.id, p_secret: p.secret }), localProgress, nameOverride),
     syncProfile: async (

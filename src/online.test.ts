@@ -99,4 +99,48 @@ describe("deduplicateRankRows (ranking online)", () => {
     expect(result[0].lifetime).toBe(5_000_000);
     expect(result[0].me).toBe(true);
   });
+
+  it("propaga e preserva level e total da vida atual dos jogadores em tempo real", () => {
+    // Gabriel Nolasco tem 22 Trilhões vitalício, mas renasceu e seu rank atual é Multiverso (nível 7, total 270M)
+    const rows: RankRow[] = [
+      { rank: 1, name: "Gabriel Nolasco", lifetime: 22_400_000_000_000, prestige: 4, equipped: {} },
+    ];
+
+    const liveMap = new Map<string, LivePlayerMeta>();
+    liveMap.set("gabriel nolasco", {
+      name: "Gabriel Nolasco",
+      lifetime: 22_400_000_000_000,
+      prestige: 4,
+      total: 280_000_000,
+      level: 7, // Multiverso
+      equipped: { hat: "hat_coroa", bg: "bg_server" },
+    });
+
+    const result = deduplicateRankRows(rows, liveMap);
+    expect(result.length).toBe(1);
+    expect(result[0].level).toBe(7);
+    expect(result[0].total).toBe(280_000_000);
+    expect(result[0].equipped.hat).toBe("hat_coroa");
+    expect(result[0].equipped.bg).toBe("bg_server");
+  });
+
+  it("garante que o progresso local repassa level e total corretos", () => {
+    const rows: RankRow[] = [
+      { rank: 1, name: "Gabriel Nolasco", lifetime: 22_400_000_000_000, prestige: 4, equipped: {} },
+    ];
+
+    const result = deduplicateRankRows(rows, undefined, "Gabriel Nolasco", {
+      lifetime: 22_400_000_000_000,
+      prestige: 4,
+      total: 300_000_000,
+      level: 7,
+      equipped: { hat: "hat_megabrain" },
+    });
+
+    expect(result[0].level).toBe(7);
+    expect(result[0].total).toBe(300_000_000);
+    expect(result[0].equipped.hat).toBe("hat_megabrain");
+    expect(result[0].me).toBe(true);
+  });
 });
+

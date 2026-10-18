@@ -300,8 +300,22 @@ function enforceLocalCosmetics(serverTokens?: number) {
   }
 }
 
+function broadcastMyStatus(force = false, actionMeta?: ActionMeta) {
+  if (!sync || !myName) return;
+  sync.broadcastCosmetics(
+    myName,
+    state.equipped as Record<string, string>,
+    state.lifetime,
+    state.prestige,
+    force,
+    actionMeta,
+    state.total,
+    levelOf(state.total)
+  );
+}
+
 enforceLocalCosmetics();
-if (myName) sync?.broadcastCosmetics(myName, state.equipped as Record<string, string>, state.lifetime, state.prestige);
+broadcastMyStatus(true);
 let nameInputPrefilled = false;
 let settingName = false;
 
@@ -455,7 +469,7 @@ function onServer(r: ServerState, _pending: string) {
     localCos.name = r.name;
     saveLocalCos(localCos);
   }
-  sync?.broadcastCosmetics(myName, state.equipped as Record<string, string>, state.lifetime, state.prestige);
+  broadcastMyStatus();
 
   if (r.name && lastRank && r.rank && r.rank < lastRank && lastAhead) {
     toast(`🚀 Você passou ${lastAhead.name}! Agora é #${r.rank} no ranking.`);
@@ -572,7 +586,7 @@ function act(code: string, arg = "") {
     save(state);
     const gAcc = loadGoogleAccount();
     if (gAcc) saveGoogleAccountVault(gAcc.email, activePlayer, state);
-    sync?.broadcastCosmetics(myName, state.equipped as Record<string, string>, state.lifetime, state.prestige);
+    broadcastMyStatus(true);
     sync?.push(code === EV.prestige ? "p" : "z");
     void sync?.flush();
     return r;
@@ -610,7 +624,7 @@ function act(code: string, arg = "") {
       if (sl) actionMeta = { action: "unequip", slot: sl };
     }
 
-    sync?.broadcastCosmetics(myName, state.equipped as Record<string, string>, state.lifetime, state.prestige, true, actionMeta);
+    broadcastMyStatus(true, actionMeta);
     void sync?.setEquipped(state.equipped as Record<string, string>);
     void pushFullProfileSync();
   }
@@ -764,7 +778,10 @@ function render() {
     const ladder = $("ladder"), now = ladderEls[l];
     ladder.scrollLeft = now.offsetLeft - (ladder.clientWidth - now.clientWidth) / 2;
     $("rank").textContent = RANKS[l][1];
-    if (up) levelUp(l);
+    if (up) {
+      levelUp(l);
+      broadcastMyStatus(true);
+    }
   }
   const bonus = LEVEL_BONUS ** l * (1 + PRESTIGE_BONUS * state.prestige);
   $("mult").textContent = `×${bonus.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} de bônus` + (state.prestige ? ` · ⭐×${state.prestige}` : "");
@@ -780,7 +797,12 @@ function render() {
   const ahead = $("ahead");
   ahead.hidden = !sync || !myName;
   if (!ahead.hidden) {
-    ahead.textContent = lastAhead
+    const isMeAhead = Boolean(
+      lastAhead &&
+      myName &&
+      lastAhead.name.trim().toLowerCase() === myName.trim().toLowerCase()
+    );
+    ahead.textContent = (lastAhead && !isMeAhead)
       ? `Faltam ${fmtShort(Math.max(0, lastAhead.lifetime - state.lifetime))} para passar ${lastAhead.name} (#${lastAhead.rank})`
       : "👑 Você é o #1 do ranking!";
   }
@@ -899,7 +921,7 @@ $("prestige").addEventListener("click", () => {
 
   // 6. Atualiza imediatamente o ranking
   if (sync) {
-    sync.broadcastCosmetics(myName, state.equipped as Record<string, string>, state.lifetime, state.prestige);
+    broadcastMyStatus(true);
     void sync.setEquipped(state.equipped as Record<string, string>);
     void pushFullProfileSync();
     void sync.flush().then(() => {
@@ -1194,7 +1216,18 @@ function rankRow(e: RankRow) {
 
   const rowLifetime = isMe ? Math.max(e.lifetime, state.lifetime) : e.lifetime;
   const rowPrestige = isMe ? Math.max(e.prestige || 0, state.prestige || 0) : (e.prestige || 0);
-  const curLvl = isMe ? levelOf(state.total) : levelOf(rowLifetime);
+
+  // Alinha o jogador local ao maior progresso vitalício já alcançado em sua conta oficial
+  if (isMe && rowLifetime > state.lifetime) {
+    state.lifetime = rowLifetime;
+    state.prestige = Math.max(state.prestige, rowPrestige);
+    save(state);
+  }
+
+  // O Rank Atual é o rank da vida atual (do jogador local ou transmitido ao vivo pelos outros jogadores)
+  const curLvl = isMe
+    ? levelOf(state.total)
+    : (typeof e.level === "number" ? e.level : (typeof e.total === "number" && e.total > 0 ? levelOf(e.total) : levelOf(rowLifetime)));
   const rankTitle = RANKS[curLvl][1];
   const rebirths = rowPrestige;
 
@@ -1228,7 +1261,7 @@ function rankRow(e: RankRow) {
   subLine.className = "rank-sub";
   const badge = document.createElement("span");
   badge.className = `rank-badge lv-${curLvl}`;
-  badge.textContent = isMe ? `Rank Atual: ${rankTitle}` : rankTitle;
+  badge.textContent = `Rank Atual: ${rankTitle}`;
   subLine.append(badge);
 
   info.append(topLine, subLine);
@@ -1250,7 +1283,7 @@ function renderRankDistribution(rows: RankRow[]) {
   }
   const counts = new Map<number, number>();
   for (const r of rows) {
-    const l = levelOf(r.lifetime);
+    const l = typeof r.level === "number" ? r.level : (typeof r.total === "number" && r.total > 0 ? levelOf(r.total) : levelOf(r.lifetime));
     counts.set(l, (counts.get(l) ?? 0) + 1);
   }
   const sortedLevels = [...counts.entries()].sort((a, b) => b[0] - a[0]);
@@ -1266,11 +1299,21 @@ function renderRankDistribution(rows: RankRow[]) {
 }
 
 async function loadRanking(silent = false) {
+  broadcastMyStatus();
   const ol = $("top");
   const dist = $("rank-distribution");
   for (const b of document.querySelectorAll<HTMLElement>(".subtabs [data-list]")) b.classList.toggle("on", b.dataset.list === list);
   if (!sync) {
-    const localRow: RankRow = { rank: 1, name: myName || "Você (Modo Local)", lifetime: state.lifetime, prestige: state.prestige, equipped: state.equipped as Record<string, string>, me: true };
+    const localRow: RankRow = {
+      rank: 1,
+      name: myName || "Você (Modo Local)",
+      lifetime: state.lifetime,
+      prestige: state.prestige,
+      equipped: state.equipped as Record<string, string>,
+      total: state.total,
+      level: levelOf(state.total),
+      me: true,
+    };
     updateMyRankHeader();
     renderRankDistribution([localRow]);
     ol.replaceChildren(rankRow(localRow));
@@ -1280,7 +1323,13 @@ async function loadRanking(silent = false) {
     ol.replaceChildren(Object.assign(document.createElement("li"), { textContent: "Carregando…" }));
   }
   try {
-    const myProg = { lifetime: state.lifetime, prestige: state.prestige, equipped: state.equipped as Record<string, string> };
+    const myProg = {
+      lifetime: state.lifetime,
+      prestige: state.prestige,
+      equipped: state.equipped as Record<string, string>,
+      total: state.total,
+      level: levelOf(state.total),
+    };
     const rows = list === "top" ? await sync.top(myProg, myName) : await sync.around(myProg, myName);
     updateMyRankHeader();
     if (!rows.length) {
@@ -1706,7 +1755,7 @@ $("wheel-spin-btn")?.addEventListener("click", () => {
     toast(`🎰 Roleta: ${finalMsg}`);
     const r = $("wheel-disc").getBoundingClientRect();
     fx.burst(r.left + r.width / 2, r.top + r.height / 2, null, 25);
-    sync?.broadcastCosmetics(myName, state.equipped as Record<string, string>, state.lifetime, state.prestige);
+    broadcastMyStatus();
     spinsState = loadSpins(todayBR());
     updateWheelBadge();
     renderedMenu = "";
@@ -1734,7 +1783,7 @@ async function handleNicknameChange(rawName: string, msgEl: HTMLElement | null) 
 
     if (sync) {
       await sync.setName(enteredName);
-      sync.broadcastCosmetics(myName, state.equipped as Record<string, string>, state.lifetime, state.prestige);
+      broadcastMyStatus(true);
       void sync.setEquipped(state.equipped as Record<string, string>);
       void pushFullProfileSync();
       await sync.flush();
